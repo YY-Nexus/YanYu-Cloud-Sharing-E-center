@@ -10,6 +10,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
 import {
   Dialog,
   DialogContent,
@@ -35,6 +37,10 @@ import {
   Activity,
   Target,
   Zap,
+  Pause,
+  Copy,
+  Download,
+  Upload,
 } from "lucide-react"
 
 export default function ServiceProcessPage() {
@@ -56,8 +62,11 @@ export default function ServiceProcessPage() {
       monthlyVolume: 1250,
       lastUpdated: "2024-01-15",
       icon: <MessageSquare className="h-5 w-5" />,
-      color: "bg-blue-50 border-blue-200",
+      color: "bg-blue-50 border-blue-200 border-l-4 border-l-blue-500",
       statusColor: "bg-green-100 text-green-800",
+      priority: "high",
+      owner: "客服团队",
+      automation: 65,
     },
     {
       id: 2,
@@ -72,8 +81,11 @@ export default function ServiceProcessPage() {
       monthlyVolume: 890,
       lastUpdated: "2024-01-12",
       icon: <FileText className="h-5 w-5" />,
-      color: "bg-green-50 border-green-200",
+      color: "bg-green-50 border-green-200 border-l-4 border-l-green-500",
       statusColor: "bg-green-100 text-green-800",
+      priority: "high",
+      owner: "订单团队",
+      automation: 85,
     },
     {
       id: 3,
@@ -88,8 +100,11 @@ export default function ServiceProcessPage() {
       monthlyVolume: 234,
       lastUpdated: "2024-01-10",
       icon: <AlertTriangle className="h-5 w-5" />,
-      color: "bg-amber-50 border-amber-200",
+      color: "bg-amber-50 border-amber-200 border-l-4 border-l-amber-500",
       statusColor: "bg-green-100 text-green-800",
+      priority: "medium",
+      owner: "售后团队",
+      automation: 45,
     },
     {
       id: 4,
@@ -104,8 +119,11 @@ export default function ServiceProcessPage() {
       monthlyVolume: 156,
       lastUpdated: "2024-01-08",
       icon: <RotateCcw className="h-5 w-5" />,
-      color: "bg-purple-50 border-purple-200",
+      color: "bg-purple-50 border-purple-200 border-l-4 border-l-purple-500",
       statusColor: "bg-amber-100 text-amber-800",
+      priority: "medium",
+      owner: "物流团队",
+      automation: 70,
     },
     {
       id: 5,
@@ -120,8 +138,30 @@ export default function ServiceProcessPage() {
       monthlyVolume: 67,
       lastUpdated: "2024-01-05",
       icon: <Users className="h-5 w-5" />,
-      color: "bg-pink-50 border-pink-200",
+      color: "bg-pink-50 border-pink-200 border-l-4 border-l-pink-500",
       statusColor: "bg-gray-100 text-gray-800",
+      priority: "high",
+      owner: "VIP团队",
+      automation: 30,
+    },
+    {
+      id: 6,
+      name: "技术支持流程",
+      description: "技术问题的分级处理和解决方案流程",
+      status: "active",
+      category: "技术支持",
+      steps: 6,
+      avgDuration: "1小时",
+      completionRate: 91,
+      satisfaction: 4.4,
+      monthlyVolume: 445,
+      lastUpdated: "2024-01-18",
+      icon: <Settings className="h-5 w-5" />,
+      color: "bg-indigo-50 border-indigo-200 border-l-4 border-l-indigo-500",
+      statusColor: "bg-green-100 text-green-800",
+      priority: "high",
+      owner: "技术团队",
+      automation: 55,
     },
   ]
 
@@ -135,6 +175,8 @@ export default function ServiceProcessPage() {
       responsible: "客服专员",
       tools: ["CRM系统", "在线客服"],
       status: "completed",
+      automation: true,
+      sla: "1分钟内响应",
     },
     {
       id: 2,
@@ -144,6 +186,8 @@ export default function ServiceProcessPage() {
       responsible: "客服专员",
       tools: ["产品知识库", "FAQ系统"],
       status: "completed",
+      automation: false,
+      sla: "5分钟内完成",
     },
     {
       id: 3,
@@ -153,6 +197,8 @@ export default function ServiceProcessPage() {
       responsible: "客服专员",
       tools: ["产品目录", "价格系统"],
       status: "in-progress",
+      automation: false,
+      sla: "10分钟内完成",
     },
     {
       id: 4,
@@ -162,6 +208,8 @@ export default function ServiceProcessPage() {
       responsible: "客户",
       tools: ["确认邮件", "电话回访"],
       status: "pending",
+      automation: true,
+      sla: "24小时内跟进",
     },
     {
       id: 5,
@@ -171,6 +219,8 @@ export default function ServiceProcessPage() {
       responsible: "客服专员",
       tools: ["跟进系统", "客户档案"],
       status: "pending",
+      automation: false,
+      sla: "48小时内完成",
     },
   ]
 
@@ -184,6 +234,7 @@ export default function ServiceProcessPage() {
       icon: <Activity className="h-5 w-5" />,
       color: "text-blue-600",
       bgColor: "bg-blue-50",
+      description: "正在运行的流程数量",
     },
     {
       title: "平均完成率",
@@ -193,6 +244,7 @@ export default function ServiceProcessPage() {
       icon: <Target className="h-5 w-5" />,
       color: "text-green-600",
       bgColor: "bg-green-50",
+      description: "流程执行成功率",
     },
     {
       title: "平均处理时长",
@@ -202,6 +254,7 @@ export default function ServiceProcessPage() {
       icon: <Clock className="h-5 w-5" />,
       color: "text-purple-600",
       bgColor: "bg-purple-50",
+      description: "流程平均执行时间",
     },
     {
       title: "流程优化率",
@@ -211,6 +264,7 @@ export default function ServiceProcessPage() {
       icon: <Zap className="h-5 w-5" />,
       color: "text-amber-600",
       bgColor: "bg-amber-50",
+      description: "流程自动化程度",
     },
   ]
 
@@ -224,6 +278,19 @@ export default function ServiceProcessPage() {
         return <Badge className="bg-gray-100 text-gray-800">草稿</Badge>
       case "paused":
         return <Badge className="bg-red-100 text-red-800">已暂停</Badge>
+      default:
+        return <Badge variant="secondary">未知</Badge>
+    }
+  }
+
+  const getPriorityBadge = (priority: string) => {
+    switch (priority) {
+      case "high":
+        return <Badge className="bg-red-100 text-red-800">高</Badge>
+      case "medium":
+        return <Badge className="bg-yellow-100 text-yellow-800">中</Badge>
+      case "low":
+        return <Badge className="bg-green-100 text-green-800">低</Badge>
       default:
         return <Badge variant="secondary">未知</Badge>
     }
@@ -248,48 +315,98 @@ export default function ServiceProcessPage() {
         {/* 页面标题 */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">服务流程设计</h1>
+            <h1 className="text-2xl font-bold text-gray-900 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              服务流程设计
+            </h1>
             <p className="text-gray-600 mt-1">售前咨询、售后响应、投诉处理流程管理</p>
           </div>
           <div className="flex gap-3">
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" className="hover:shadow-xl transition-all duration-300 bg-transparent">
+              <Upload className="h-4 w-4 mr-2" />
+              导入流程
+            </Button>
+            <Button variant="outline" size="sm" className="hover:shadow-xl transition-all duration-300 bg-transparent">
+              <Download className="h-4 w-4 mr-2" />
+              导出流程
+            </Button>
+            <Button variant="outline" size="sm" className="hover:shadow-xl transition-all duration-300 bg-transparent">
               <Settings className="h-4 w-4 mr-2" />
               流程设置
             </Button>
             <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
               <DialogTrigger asChild>
-                <Button size="sm">
+                <Button
+                  size="sm"
+                  className="hover:shadow-xl transition-all duration-300 bg-gradient-to-r from-blue-600 to-purple-600"
+                >
                   <Plus className="h-4 w-4 mr-2" />
                   新建流程
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px]">
+              <DialogContent className="sm:max-w-[600px]">
                 <DialogHeader>
                   <DialogTitle>创建新流程</DialogTitle>
                   <DialogDescription>设计一个新的服务流程来优化客户体验</DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">流程名称</label>
-                    <Input placeholder="输入流程名称" />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="processName">流程名称</Label>
+                      <Input id="processName" placeholder="输入流程名称" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="processCategory">流程分类</Label>
+                      <Select>
+                        <SelectTrigger>
+                          <SelectValue placeholder="选择流程分类" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="presale">售前服务</SelectItem>
+                          <SelectItem value="order">订单管理</SelectItem>
+                          <SelectItem value="aftersale">售后服务</SelectItem>
+                          <SelectItem value="vip">VIP服务</SelectItem>
+                          <SelectItem value="technical">技术支持</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="processPriority">优先级</Label>
+                      <Select>
+                        <SelectTrigger>
+                          <SelectValue placeholder="选择优先级" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="high">高</SelectItem>
+                          <SelectItem value="medium">中</SelectItem>
+                          <SelectItem value="low">低</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="processOwner">负责团队</Label>
+                      <Select>
+                        <SelectTrigger>
+                          <SelectValue placeholder="选择负责团队" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="customer-service">客服团队</SelectItem>
+                          <SelectItem value="order">订单团队</SelectItem>
+                          <SelectItem value="aftersale">售后团队</SelectItem>
+                          <SelectItem value="technical">技术团队</SelectItem>
+                          <SelectItem value="vip">VIP团队</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">流程分类</label>
-                    <Select>
-                      <SelectTrigger>
-                        <SelectValue placeholder="选择流程分类" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="presale">售前服务</SelectItem>
-                        <SelectItem value="order">订单管理</SelectItem>
-                        <SelectItem value="aftersale">售后服务</SelectItem>
-                        <SelectItem value="vip">VIP服务</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Label htmlFor="processDesc">流程描述</Label>
+                    <Textarea id="processDesc" placeholder="描述流程的目的和适用场景" />
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">流程描述</label>
-                    <Textarea placeholder="描述流程的目的和适用场景" />
+                  <div className="flex items-center space-x-2">
+                    <Switch id="autoStart" />
+                    <Label htmlFor="autoStart">自动启动流程</Label>
                   </div>
                 </div>
                 <DialogFooter>
@@ -306,7 +423,10 @@ export default function ServiceProcessPage() {
         {/* 统计指标 */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {processStats.map((stat, index) => (
-            <Card key={index} className="border-0 shadow-sm hover:shadow-md transition-shadow">
+            <Card
+              key={index}
+              className="border-0 shadow-sm hover:shadow-xl transition-all duration-300 border-l-4 border-l-blue-500"
+            >
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div className={`p-3 rounded-xl ${stat.bgColor}`}>
@@ -319,6 +439,7 @@ export default function ServiceProcessPage() {
                 <div className="mt-4">
                   <h3 className="text-2xl font-bold text-gray-900">{stat.value}</h3>
                   <p className="text-sm text-gray-600 mt-1">{stat.title}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{stat.description}</p>
                 </div>
               </CardContent>
             </Card>
@@ -337,17 +458,17 @@ export default function ServiceProcessPage() {
           {/* 流程总览 */}
           <TabsContent value="overview" className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card>
+              <Card className="border-l-4 border-l-blue-500 hover:shadow-xl transition-all duration-300">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Activity className="h-5 w-5 text-blue-600" />
+                  <CardTitle className="flex items-center gap-2 text-blue-600">
+                    <Activity className="h-5 w-5" />
                     流程执行概况
                   </CardTitle>
                   <CardDescription>当前活跃流程的执行状态和效率指标</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+                    <div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg border-l-4 border-l-blue-500">
                       <div>
                         <div className="font-medium text-blue-900">今日处理量</div>
                         <div className="text-sm text-blue-700">已完成流程数量</div>
@@ -357,7 +478,7 @@ export default function ServiceProcessPage() {
                         <div className="text-xs text-blue-600">+12% 较昨日</div>
                       </div>
                     </div>
-                    <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+                    <div className="flex items-center justify-between p-4 bg-green-50 rounded-lg border-l-4 border-l-green-500">
                       <div>
                         <div className="font-medium text-green-900">平均效率</div>
                         <div className="text-sm text-green-700">流程完成速度</div>
@@ -367,7 +488,7 @@ export default function ServiceProcessPage() {
                         <div className="text-xs text-green-600">+5% 较上周</div>
                       </div>
                     </div>
-                    <div className="flex items-center justify-between p-3 bg-purple-50 rounded-lg">
+                    <div className="flex items-center justify-between p-4 bg-purple-50 rounded-lg border-l-4 border-l-purple-500">
                       <div>
                         <div className="font-medium text-purple-900">客户满意度</div>
                         <div className="text-sm text-purple-700">流程体验评分</div>
@@ -381,17 +502,17 @@ export default function ServiceProcessPage() {
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="border-l-4 border-l-green-500 hover:shadow-xl transition-all duration-300">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Target className="h-5 w-5 text-green-600" />
+                  <CardTitle className="flex items-center gap-2 text-green-600">
+                    <Target className="h-5 w-5" />
                     流程分类统计
                   </CardTitle>
                   <CardDescription>不同类型服务流程的分布和使用情况</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+                    <div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg border-l-4 border-l-blue-500">
                       <div className="flex items-center gap-3">
                         <MessageSquare className="h-5 w-5 text-blue-600" />
                         <div>
@@ -404,7 +525,7 @@ export default function ServiceProcessPage() {
                         <div className="text-xs text-blue-600">40% 占比</div>
                       </div>
                     </div>
-                    <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+                    <div className="flex items-center justify-between p-4 bg-green-50 rounded-lg border-l-4 border-l-green-500">
                       <div className="flex items-center gap-3">
                         <FileText className="h-5 w-5 text-green-600" />
                         <div>
@@ -417,7 +538,7 @@ export default function ServiceProcessPage() {
                         <div className="text-xs text-green-600">27% 占比</div>
                       </div>
                     </div>
-                    <div className="flex items-center justify-between p-3 bg-amber-50 rounded-lg">
+                    <div className="flex items-center justify-between p-4 bg-amber-50 rounded-lg border-l-4 border-l-amber-500">
                       <div className="flex items-center gap-3">
                         <AlertTriangle className="h-5 w-5 text-amber-600" />
                         <div>
@@ -440,7 +561,7 @@ export default function ServiceProcessPage() {
           <TabsContent value="processes" className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {serviceProcesses.map((process) => (
-                <Card key={process.id} className={`${process.color} transition-all duration-300 hover:shadow-lg`}>
+                <Card key={process.id} className={`${process.color} transition-all duration-300 hover:shadow-xl`}>
                   <CardContent className="p-6">
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-3">
@@ -450,7 +571,10 @@ export default function ServiceProcessPage() {
                           <p className="text-sm text-gray-600">{process.category}</p>
                         </div>
                       </div>
-                      {getStatusBadge(process.status)}
+                      <div className="flex flex-col gap-1">
+                        {getStatusBadge(process.status)}
+                        {getPriorityBadge(process.priority)}
+                      </div>
                     </div>
 
                     <p className="text-sm text-gray-600 mb-4">{process.description}</p>
@@ -480,19 +604,47 @@ export default function ServiceProcessPage() {
                         <span className="font-medium">{process.monthlyVolume}</span>
                       </div>
                       <Progress value={(process.monthlyVolume / 1500) * 100} className="h-2" />
+                      <div className="flex justify-between text-sm">
+                        <span>自动化程度</span>
+                        <span className="font-medium">{process.automation}%</span>
+                      </div>
+                      <Progress value={process.automation} className="h-2" />
+                    </div>
+
+                    <div className="text-xs text-gray-500 mb-4">
+                      负责团队：{process.owner} | 更新时间：{process.lastUpdated}
                     </div>
 
                     <div className="flex gap-2">
-                      <Button size="sm" variant="outline" className="flex-1 bg-transparent">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1 bg-transparent hover:shadow-md transition-all duration-300"
+                      >
                         <Edit className="h-4 w-4 mr-1" />
                         编辑
                       </Button>
-                      <Button size="sm" variant="outline" className="flex-1 bg-transparent">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1 bg-transparent hover:shadow-md transition-all duration-300"
+                      >
                         <Eye className="h-4 w-4 mr-1" />
                         查看
                       </Button>
-                      <Button size="sm" variant="outline">
-                        <Play className="h-4 w-4" />
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="hover:shadow-md transition-all duration-300 bg-transparent"
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="hover:shadow-md transition-all duration-300 bg-transparent"
+                      >
+                        {process.status === "active" ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
                       </Button>
                     </div>
                   </CardContent>
@@ -503,10 +655,10 @@ export default function ServiceProcessPage() {
 
           {/* 流程设计器 */}
           <TabsContent value="designer" className="space-y-6">
-            <Card>
+            <Card className="border-l-4 border-l-purple-500 hover:shadow-xl transition-all duration-300">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Settings className="h-5 w-5 text-purple-600" />
+                <CardTitle className="flex items-center gap-2 text-purple-600">
+                  <Settings className="h-5 w-5" />
                   流程步骤设计
                 </CardTitle>
                 <CardDescription>设计和配置服务流程的详细步骤</CardDescription>
@@ -514,7 +666,10 @@ export default function ServiceProcessPage() {
               <CardContent>
                 <div className="space-y-4">
                   {processSteps.map((step, index) => (
-                    <div key={step.id} className="flex items-start gap-4 p-4 bg-gray-50 rounded-lg">
+                    <div
+                      key={step.id}
+                      className="flex items-start gap-4 p-4 bg-gray-50 rounded-lg hover:shadow-md transition-all duration-300"
+                    >
                       <div className="flex items-center gap-2">
                         <div className="w-8 h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-sm font-medium">
                           {index + 1}
@@ -531,30 +686,37 @@ export default function ServiceProcessPage() {
                             <Badge variant="secondary" className="text-xs">
                               {step.responsible}
                             </Badge>
+                            {step.automation && <Badge className="bg-green-100 text-green-800 text-xs">自动化</Badge>}
                           </div>
                         </div>
                         <p className="text-sm text-gray-600 mb-2">{step.description}</p>
-                        <div className="flex flex-wrap gap-1">
-                          {step.tools.map((tool, toolIndex) => (
-                            <Badge key={toolIndex} variant="outline" className="text-xs">
-                              {tool}
-                            </Badge>
-                          ))}
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex flex-wrap gap-1">
+                            {step.tools.map((tool, toolIndex) => (
+                              <Badge key={toolIndex} variant="outline" className="text-xs">
+                                {tool}
+                              </Badge>
+                            ))}
+                          </div>
+                          <div className="text-xs text-muted-foreground">SLA: {step.sla}</div>
                         </div>
                       </div>
                       <div className="flex gap-1">
-                        <Button size="sm" variant="ghost">
+                        <Button size="sm" variant="ghost" className="hover:shadow-md transition-all duration-300">
                           <Edit className="h-4 w-4" />
                         </Button>
-                        <Button size="sm" variant="ghost">
+                        <Button size="sm" variant="ghost" className="hover:shadow-md transition-all duration-300">
                           <Settings className="h-4 w-4" />
+                        </Button>
+                        <Button size="sm" variant="ghost" className="hover:shadow-md transition-all duration-300">
+                          <Copy className="h-4 w-4" />
                         </Button>
                       </div>
                     </div>
                   ))}
                 </div>
                 <div className="flex justify-center mt-6">
-                  <Button>
+                  <Button className="hover:shadow-xl transition-all duration-300">
                     <Plus className="h-4 w-4 mr-2" />
                     添加步骤
                   </Button>
@@ -566,18 +728,21 @@ export default function ServiceProcessPage() {
           {/* 效果分析 */}
           <TabsContent value="analytics" className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card>
+              <Card className="border-l-4 border-l-amber-500 hover:shadow-xl transition-all duration-300">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Zap className="h-5 w-5 text-amber-600" />
+                  <CardTitle className="flex items-center gap-2 text-amber-600">
+                    <Zap className="h-5 w-5" />
                     流程效率分析
                   </CardTitle>
                   <CardDescription>各流程的执行效率和优化建议</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {serviceProcesses.slice(0, 3).map((process) => (
-                      <div key={process.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    {serviceProcesses.slice(0, 4).map((process) => (
+                      <div
+                        key={process.id}
+                        className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:shadow-sm transition-all duration-300"
+                      >
                         <div className="flex items-center gap-3">
                           {process.icon}
                           <div>
@@ -588,6 +753,7 @@ export default function ServiceProcessPage() {
                         <div className="text-right">
                           <div className="font-semibold text-gray-900">{process.avgDuration}</div>
                           <div className="text-xs text-gray-500">平均时长</div>
+                          <Progress value={process.automation} className="w-16 h-1 mt-1" />
                         </div>
                       </div>
                     ))}
@@ -595,41 +761,82 @@ export default function ServiceProcessPage() {
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="border-l-4 border-l-green-500 hover:shadow-xl transition-all duration-300">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Target className="h-5 w-5 text-green-600" />
+                  <CardTitle className="flex items-center gap-2 text-green-600">
+                    <Target className="h-5 w-5" />
                     优化建议
                   </CardTitle>
                   <CardDescription>基于数据分析的流程优化建议</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    <div className="flex items-start gap-3 p-3 bg-blue-50 rounded-lg">
+                    <div className="flex items-start gap-3 p-3 bg-blue-50 rounded-lg border-l-4 border-l-blue-500">
                       <CheckCircle className="h-5 w-5 text-blue-600 mt-0.5" />
                       <div>
                         <div className="font-medium text-blue-900">自动化机会</div>
                         <div className="text-sm text-blue-700">售前咨询流程中的信息收集步骤可以通过表单自动化</div>
+                        <div className="text-xs text-blue-600 mt-1">预计提升效率 30%</div>
                       </div>
                     </div>
-                    <div className="flex items-start gap-3 p-3 bg-amber-50 rounded-lg">
+                    <div className="flex items-start gap-3 p-3 bg-amber-50 rounded-lg border-l-4 border-l-amber-500">
                       <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5" />
                       <div>
                         <div className="font-medium text-amber-900">瓶颈识别</div>
                         <div className="text-sm text-amber-700">投诉处理流程在"方案制定"环节耗时较长，建议优化</div>
+                        <div className="text-xs text-amber-600 mt-1">当前平均耗时 25分钟</div>
                       </div>
                     </div>
-                    <div className="flex items-start gap-3 p-3 bg-green-50 rounded-lg">
+                    <div className="flex items-start gap-3 p-3 bg-green-50 rounded-lg border-l-4 border-l-green-500">
                       <Zap className="h-5 w-5 text-green-600 mt-0.5" />
                       <div>
                         <div className="font-medium text-green-900">效率提升</div>
                         <div className="text-sm text-green-700">通过模板化回复可将平均响应时间缩短30%</div>
+                        <div className="text-xs text-green-600 mt-1">预计节省时间 8分钟/次</div>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3 p-3 bg-purple-50 rounded-lg border-l-4 border-l-purple-500">
+                      <Target className="h-5 w-5 text-purple-600 mt-0.5" />
+                      <div>
+                        <div className="font-medium text-purple-900">质量改进</div>
+                        <div className="text-sm text-purple-700">增加质量检查节点可提升客户满意度</div>
+                        <div className="text-xs text-purple-600 mt-1">预计满意度提升 0.3分</div>
                       </div>
                     </div>
                   </div>
                 </CardContent>
               </Card>
             </div>
+
+            {/* 流程性能趋势 */}
+            <Card className="border-l-4 border-l-indigo-500 hover:shadow-xl transition-all duration-300">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-indigo-600">
+                  <Activity className="h-5 w-5" />
+                  流程性能趋势
+                </CardTitle>
+                <CardDescription>流程执行效率和质量的历史趋势分析</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="text-center p-4 bg-blue-50 rounded-lg border-l-4 border-l-blue-500">
+                    <div className="text-2xl font-bold text-blue-900">↗ 15%</div>
+                    <div className="text-sm text-blue-700">效率提升</div>
+                    <div className="text-xs text-blue-600 mt-1">较上月</div>
+                  </div>
+                  <div className="text-center p-4 bg-green-50 rounded-lg border-l-4 border-l-green-500">
+                    <div className="text-2xl font-bold text-green-900">↗ 0.4</div>
+                    <div className="text-sm text-green-700">满意度提升</div>
+                    <div className="text-xs text-green-600 mt-1">较上月</div>
+                  </div>
+                  <div className="text-center p-4 bg-purple-50 rounded-lg border-l-4 border-l-purple-500">
+                    <div className="text-2xl font-bold text-purple-900">↘ 12%</div>
+                    <div className="text-sm text-purple-700">处理时长缩短</div>
+                    <div className="text-xs text-purple-600 mt-1">较上月</div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       </div>

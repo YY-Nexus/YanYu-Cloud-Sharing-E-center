@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
 import {
   Dialog,
   DialogContent,
@@ -33,6 +34,12 @@ import {
   MessageSquare,
   Target,
   Award,
+  Download,
+  Upload,
+  Calendar,
+  Clock,
+  CheckCircle,
+  AlertCircle,
 } from "lucide-react"
 
 export default function SatisfactionPage() {
@@ -50,6 +57,7 @@ export default function SatisfactionPage() {
       icon: <Star className="h-5 w-5" />,
       color: "text-amber-600",
       bgColor: "bg-amber-50",
+      description: "客户整体满意度评分",
     },
     {
       title: "参与调研人数",
@@ -60,6 +68,7 @@ export default function SatisfactionPage() {
       icon: <Users className="h-5 w-5" />,
       color: "text-blue-600",
       bgColor: "bg-blue-50",
+      description: "本月参与调研客户数",
     },
     {
       title: "调研完成率",
@@ -70,6 +79,7 @@ export default function SatisfactionPage() {
       icon: <Target className="h-5 w-5" />,
       color: "text-green-600",
       bgColor: "bg-green-50",
+      description: "调研问卷完成比例",
     },
     {
       title: "改进措施数",
@@ -80,6 +90,7 @@ export default function SatisfactionPage() {
       icon: <Award className="h-5 w-5" />,
       color: "text-purple-600",
       bgColor: "bg-purple-50",
+      description: "基于反馈的改进措施",
     },
   ]
 
@@ -97,6 +108,9 @@ export default function SatisfactionPage() {
       createdDate: "2024-01-15",
       endDate: "2024-02-15",
       questions: 12,
+      targetAudience: "全体客户",
+      priority: "high",
+      creator: "产品团队",
     },
     {
       id: 2,
@@ -110,6 +124,9 @@ export default function SatisfactionPage() {
       createdDate: "2024-01-10",
       endDate: "2024-02-10",
       questions: 8,
+      targetAudience: "服务客户",
+      priority: "high",
+      creator: "客服团队",
     },
     {
       id: 3,
@@ -123,6 +140,9 @@ export default function SatisfactionPage() {
       createdDate: "2023-12-01",
       endDate: "2023-12-31",
       questions: 10,
+      targetAudience: "售后客户",
+      priority: "medium",
+      creator: "售后团队",
     },
     {
       id: 4,
@@ -136,6 +156,25 @@ export default function SatisfactionPage() {
       createdDate: "2024-01-20",
       endDate: "2024-03-20",
       questions: 15,
+      targetAudience: "VIP客户",
+      priority: "high",
+      creator: "管理团队",
+    },
+    {
+      id: 5,
+      title: "移动端使用体验",
+      description: "专门针对移动端应用使用体验的调研",
+      status: "active",
+      type: "产品体验",
+      responses: 334,
+      avgScore: 4.0,
+      completionRate: 78,
+      createdDate: "2024-01-18",
+      endDate: "2024-02-18",
+      questions: 9,
+      targetAudience: "移动用户",
+      priority: "medium",
+      creator: "技术团队",
     },
   ]
 
@@ -158,6 +197,10 @@ export default function SatisfactionPage() {
       priority: "high",
       impact: "响应时间缩短60%",
       implementDate: "2024-01-10",
+      category: "服务效率",
+      responsible: "客服团队",
+      budget: 50000,
+      roi: 3.2,
     },
     {
       id: 2,
@@ -167,6 +210,10 @@ export default function SatisfactionPage() {
       priority: "medium",
       impact: "预计减少30%的咨询量",
       implementDate: "2024-01-25",
+      category: "用户体验",
+      responsible: "产品团队",
+      budget: 30000,
+      roi: 2.8,
     },
     {
       id: 3,
@@ -176,6 +223,23 @@ export default function SatisfactionPage() {
       priority: "high",
       impact: "预计提升满意度0.5分",
       implementDate: "2024-02-01",
+      category: "服务流程",
+      responsible: "售后团队",
+      budget: 80000,
+      roi: 4.1,
+    },
+    {
+      id: 4,
+      title: "移动端体验优化",
+      description: "优化移动端界面和交互体验",
+      status: "in-progress",
+      priority: "medium",
+      impact: "预计提升移动端满意度0.4分",
+      implementDate: "2024-01-30",
+      category: "产品优化",
+      responsible: "技术团队",
+      budget: 120000,
+      roi: 2.5,
     },
   ]
 
@@ -220,70 +284,131 @@ export default function SatisfactionPage() {
     }
   }
 
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat("zh-CN", {
+      style: "currency",
+      currency: "CNY",
+      minimumFractionDigits: 0,
+    }).format(amount)
+  }
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
         {/* 页面标题 */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">满意度调研分析</h1>
+            <h1 className="text-2xl font-bold text-gray-900 bg-gradient-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent">
+              满意度调研分析
+            </h1>
             <p className="text-gray-600 mt-1">问卷配置、结果统计、改进举措跟踪</p>
           </div>
           <div className="flex gap-3">
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" className="hover:shadow-xl transition-all duration-300 bg-transparent">
+              <Upload className="h-4 w-4 mr-2" />
+              导入调研
+            </Button>
+            <Button variant="outline" size="sm" className="hover:shadow-xl transition-all duration-300 bg-transparent">
+              <Download className="h-4 w-4 mr-2" />
+              导出报告
+            </Button>
+            <Button variant="outline" size="sm" className="hover:shadow-xl transition-all duration-300 bg-transparent">
               <Settings className="h-4 w-4 mr-2" />
               调研设置
             </Button>
             <Dialog open={isCreateSurveyOpen} onOpenChange={setIsCreateSurveyOpen}>
               <DialogTrigger asChild>
-                <Button size="sm">
+                <Button
+                  size="sm"
+                  className="hover:shadow-xl transition-all duration-300 bg-gradient-to-r from-amber-600 to-orange-600"
+                >
                   <Plus className="h-4 w-4 mr-2" />
                   创建调研
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-[500px]">
+              <DialogContent className="sm:max-w-[600px]">
                 <DialogHeader>
                   <DialogTitle>创建满意度调研</DialogTitle>
                   <DialogDescription>设计新的客户满意度调研问卷</DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">调研标题</label>
-                    <Input placeholder="输入调研标题" />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">调研类型</label>
-                    <Select>
-                      <SelectTrigger>
-                        <SelectValue placeholder="选择调研类型" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="product">产品体验</SelectItem>
-                        <SelectItem value="service">服务质量</SelectItem>
-                        <SelectItem value="support">售后服务</SelectItem>
-                        <SelectItem value="overall">综合评价</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">调研描述</label>
-                    <Textarea placeholder="描述调研的目的和内容" />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="surveyTitle">调研标题</Label>
+                      <Input id="surveyTitle" placeholder="输入调研标题" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="surveyType">调研类型</Label>
+                      <Select>
+                        <SelectTrigger>
+                          <SelectValue placeholder="选择调研类型" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="product">产品体验</SelectItem>
+                          <SelectItem value="service">服务质量</SelectItem>
+                          <SelectItem value="support">售后服务</SelectItem>
+                          <SelectItem value="overall">综合评价</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <label className="text-sm font-medium">开始日期</label>
-                      <Input type="date" />
+                      <Label htmlFor="targetAudience">目标受众</Label>
+                      <Select>
+                        <SelectTrigger>
+                          <SelectValue placeholder="选择目标受众" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">全体客户</SelectItem>
+                          <SelectItem value="vip">VIP客户</SelectItem>
+                          <SelectItem value="active">活跃客户</SelectItem>
+                          <SelectItem value="service">服务客户</SelectItem>
+                          <SelectItem value="mobile">移动用户</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                     <div className="space-y-2">
-                      <label className="text-sm font-medium">结束日期</label>
-                      <Input type="date" />
+                      <Label htmlFor="priority">优先级</Label>
+                      <Select>
+                        <SelectTrigger>
+                          <SelectValue placeholder="选择优先级" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="high">高</SelectItem>
+                          <SelectItem value="medium">中</SelectItem>
+                          <SelectItem value="low">低</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <Switch id="anonymous" />
-                    <label htmlFor="anonymous" className="text-sm font-medium">
-                      匿名调研
-                    </label>
+                  <div className="space-y-2">
+                    <Label htmlFor="surveyDesc">调研描述</Label>
+                    <Textarea id="surveyDesc" placeholder="描述调研的目的和内容" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="startDate">开始日期</Label>
+                      <Input id="startDate" type="date" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="endDate">结束日期</Label>
+                      <Input id="endDate" type="date" />
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    <div className="flex items-center space-x-2">
+                      <Switch id="anonymous" />
+                      <Label htmlFor="anonymous">匿名调研</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Switch id="reminder" />
+                      <Label htmlFor="reminder">自动提醒</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Switch id="incentive" />
+                      <Label htmlFor="incentive">参与激励</Label>
+                    </div>
                   </div>
                 </div>
                 <DialogFooter>
@@ -300,7 +425,10 @@ export default function SatisfactionPage() {
         {/* 统计指标 */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {satisfactionStats.map((stat, index) => (
-            <Card key={index} className="border-0 shadow-sm hover:shadow-md transition-shadow">
+            <Card
+              key={index}
+              className="border-0 shadow-sm hover:shadow-xl transition-all duration-300 border-l-4 border-l-amber-500"
+            >
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div className={`p-3 rounded-xl ${stat.bgColor}`}>
@@ -316,6 +444,7 @@ export default function SatisfactionPage() {
                     <span className="text-sm text-gray-500 font-normal">{stat.unit}</span>
                   </h3>
                   <p className="text-sm text-gray-600 mt-1">{stat.title}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{stat.description}</p>
                 </div>
               </CardContent>
             </Card>
@@ -334,10 +463,10 @@ export default function SatisfactionPage() {
           {/* 满意度概览 */}
           <TabsContent value="overview" className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card>
+              <Card className="border-l-4 border-l-amber-500 hover:shadow-xl transition-all duration-300">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Star className="h-5 w-5 text-amber-600" />
+                  <CardTitle className="flex items-center gap-2 text-amber-600">
+                    <Star className="h-5 w-5" />
                     满意度分布
                   </CardTitle>
                   <CardDescription>客户满意度评分的分布情况</CardDescription>
@@ -352,29 +481,36 @@ export default function SatisfactionPage() {
                             {item.count}人 ({item.percentage}%)
                           </span>
                         </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div className="w-full bg-gray-200 rounded-full h-3">
                           <div
-                            className={`h-2 rounded-full ${item.color}`}
+                            className={`h-3 rounded-full ${item.color} transition-all duration-500`}
                             style={{ width: `${item.percentage}%` }}
                           ></div>
                         </div>
                       </div>
                     ))}
                   </div>
+                  <div className="mt-6 p-4 bg-amber-50 rounded-lg border-l-4 border-l-amber-500">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Star className="h-4 w-4 text-amber-600" />
+                      <span className="font-medium text-amber-900">总体评价</span>
+                    </div>
+                    <div className="text-sm text-amber-700">77%的客户给出4分以上评价，整体满意度表现良好</div>
+                  </div>
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="border-l-4 border-l-green-500 hover:shadow-xl transition-all duration-300">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <TrendingUp className="h-5 w-5 text-green-600" />
+                  <CardTitle className="flex items-center gap-2 text-green-600">
+                    <TrendingUp className="h-5 w-5" />
                     满意度趋势
                   </CardTitle>
                   <CardDescription>近期满意度变化趋势分析</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+                    <div className="flex items-center justify-between p-4 bg-green-50 rounded-lg border-l-4 border-l-green-500">
                       <div>
                         <div className="font-medium text-green-900">本月平均分</div>
                         <div className="text-sm text-green-700">当前月份满意度</div>
@@ -387,7 +523,7 @@ export default function SatisfactionPage() {
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+                    <div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg border-l-4 border-l-blue-500">
                       <div>
                         <div className="font-medium text-blue-900">上月平均分</div>
                         <div className="text-sm text-blue-700">上个月满意度</div>
@@ -400,7 +536,7 @@ export default function SatisfactionPage() {
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center justify-between p-3 bg-purple-50 rounded-lg">
+                    <div className="flex items-center justify-between p-4 bg-purple-50 rounded-lg border-l-4 border-l-purple-500">
                       <div>
                         <div className="font-medium text-purple-900">季度平均分</div>
                         <div className="text-sm text-purple-700">本季度满意度</div>
@@ -423,14 +559,20 @@ export default function SatisfactionPage() {
           <TabsContent value="surveys" className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {surveys.map((survey) => (
-                <Card key={survey.id} className="transition-all duration-300 hover:shadow-lg">
+                <Card
+                  key={survey.id}
+                  className="transition-all duration-300 hover:shadow-xl border-l-4 border-l-blue-500"
+                >
                   <CardContent className="p-6">
                     <div className="flex items-center justify-between mb-4">
                       <div>
                         <h3 className="font-semibold text-gray-900">{survey.title}</h3>
                         <p className="text-sm text-gray-600">{survey.type}</p>
                       </div>
-                      {getStatusBadge(survey.status)}
+                      <div className="flex flex-col gap-1">
+                        {getStatusBadge(survey.status)}
+                        {getPriorityBadge(survey.priority)}
+                      </div>
                     </div>
 
                     <p className="text-sm text-gray-600 mb-4">{survey.description}</p>
@@ -465,20 +607,37 @@ export default function SatisfactionPage() {
                       <Progress value={survey.completionRate} className="h-2" />
                     </div>
 
-                    <div className="text-xs text-gray-500 mb-4">
-                      创建时间：{survey.createdDate} | 截止时间：{survey.endDate}
+                    <div className="text-xs text-gray-500 mb-4 space-y-1">
+                      <div>
+                        目标受众：{survey.targetAudience} | 创建者：{survey.creator}
+                      </div>
+                      <div>
+                        创建时间：{survey.createdDate} | 截止时间：{survey.endDate}
+                      </div>
                     </div>
 
                     <div className="flex gap-2">
-                      <Button size="sm" variant="outline" className="flex-1 bg-transparent">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1 bg-transparent hover:shadow-md transition-all duration-300"
+                      >
                         <Edit className="h-4 w-4 mr-1" />
                         编辑
                       </Button>
-                      <Button size="sm" variant="outline" className="flex-1 bg-transparent">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1 bg-transparent hover:shadow-md transition-all duration-300"
+                      >
                         <Eye className="h-4 w-4 mr-1" />
                         查看
                       </Button>
-                      <Button size="sm" variant="outline">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="hover:shadow-md transition-all duration-300 bg-transparent"
+                      >
                         <Send className="h-4 w-4" />
                       </Button>
                     </div>
@@ -491,101 +650,118 @@ export default function SatisfactionPage() {
           {/* 数据分析 */}
           <TabsContent value="analysis" className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card>
+              <Card className="border-l-4 border-l-blue-500 hover:shadow-xl transition-all duration-300">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <BarChart3 className="h-5 w-5 text-blue-600" />
+                  <CardTitle className="flex items-center gap-2 text-blue-600">
+                    <BarChart3 className="h-5 w-5" />
                     各维度满意度
                   </CardTitle>
                   <CardDescription>不同服务维度的满意度对比</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm">产品质量</span>
-                      <div className="flex items-center gap-2">
-                        <Progress value={92} className="w-20 h-2" />
-                        <span className="text-sm font-medium">4.6</span>
+                    {[
+                      { dimension: "产品质量", score: 4.6, progress: 92, color: "bg-green-500" },
+                      { dimension: "服务态度", score: 4.4, progress: 88, color: "bg-blue-500" },
+                      { dimension: "响应速度", score: 4.2, progress: 84, color: "bg-purple-500" },
+                      { dimension: "问题解决", score: 4.5, progress: 90, color: "bg-amber-500" },
+                      { dimension: "整体体验", score: 4.3, progress: 86, color: "bg-pink-500" },
+                    ].map((item, index) => (
+                      <div key={index} className="flex items-center justify-between">
+                        <span className="text-sm font-medium">{item.dimension}</span>
+                        <div className="flex items-center gap-3">
+                          <div className="w-24">
+                            <Progress value={item.progress} className="h-2" />
+                          </div>
+                          <span className="text-sm font-medium w-8">{item.score}</span>
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm">服务态度</span>
-                      <div className="flex items-center gap-2">
-                        <Progress value={88} className="w-20 h-2" />
-                        <span className="text-sm font-medium">4.4</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm">响应速度</span>
-                      <div className="flex items-center gap-2">
-                        <Progress value={85} className="w-20 h-2" />
-                        <span className="text-sm font-medium">4.2</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm">问题解决</span>
-                      <div className="flex items-center gap-2">
-                        <Progress value={90} className="w-20 h-2" />
-                        <span className="text-sm font-medium">4.5</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm">整体体验</span>
-                      <div className="flex items-center gap-2">
-                        <Progress value={87} className="w-20 h-2" />
-                        <span className="text-sm font-medium">4.3</span>
-                      </div>
-                    </div>
+                    ))}
                   </div>
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="border-l-4 border-l-green-500 hover:shadow-xl transition-all duration-300">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <MessageSquare className="h-5 w-5 text-green-600" />
+                  <CardTitle className="flex items-center gap-2 text-green-600">
+                    <MessageSquare className="h-5 w-5" />
                     客户反馈摘要
                   </CardTitle>
                   <CardDescription>客户意见和建议的关键词分析</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    <div className="flex items-start gap-3 p-3 bg-green-50 rounded-lg">
-                      <div className="w-2 h-2 bg-green-500 rounded-full mt-2"></div>
+                    <div className="flex items-start gap-3 p-4 bg-green-50 rounded-lg border-l-4 border-l-green-500">
+                      <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
                       <div>
                         <div className="font-medium text-green-900">正面反馈</div>
                         <div className="text-sm text-green-700">服务专业、响应及时、解决问题高效</div>
-                        <div className="text-xs text-green-600 mt-1">占比 78%</div>
+                        <div className="text-xs text-green-600 mt-1">占比 78% | 关键词：专业、及时、高效</div>
                       </div>
                     </div>
-                    <div className="flex items-start gap-3 p-3 bg-amber-50 rounded-lg">
-                      <div className="w-2 h-2 bg-amber-500 rounded-full mt-2"></div>
+                    <div className="flex items-start gap-3 p-4 bg-amber-50 rounded-lg border-l-4 border-l-amber-500">
+                      <Clock className="h-5 w-5 text-amber-600 mt-0.5" />
                       <div>
                         <div className="font-medium text-amber-900">改进建议</div>
                         <div className="text-sm text-amber-700">希望增加自助服务选项、优化移动端体验</div>
-                        <div className="text-xs text-amber-600 mt-1">占比 15%</div>
+                        <div className="text-xs text-amber-600 mt-1">占比 15% | 关键词：自助、移动端、便利</div>
                       </div>
                     </div>
-                    <div className="flex items-start gap-3 p-3 bg-red-50 rounded-lg">
-                      <div className="w-2 h-2 bg-red-500 rounded-full mt-2"></div>
+                    <div className="flex items-start gap-3 p-4 bg-red-50 rounded-lg border-l-4 border-l-red-500">
+                      <AlertCircle className="h-5 w-5 text-red-600 mt-0.5" />
                       <div>
                         <div className="font-medium text-red-900">负面反馈</div>
                         <div className="text-sm text-red-700">等待时间较长、部分问题未能一次性解决</div>
-                        <div className="text-xs text-red-600 mt-1">占比 7%</div>
+                        <div className="text-xs text-red-600 mt-1">占比 7% | 关键词：等待、重复、复杂</div>
                       </div>
                     </div>
                   </div>
                 </CardContent>
               </Card>
             </div>
+
+            {/* 满意度趋势图表区域 */}
+            <Card className="border-l-4 border-l-purple-500 hover:shadow-xl transition-all duration-300">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-purple-600">
+                  <TrendingUp className="h-5 w-5" />
+                  满意度趋势分析
+                </CardTitle>
+                <CardDescription>各类型调研的满意度变化趋势</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  {[
+                    { type: "产品体验", current: 4.3, previous: 4.1, trend: "up" },
+                    { type: "服务质量", current: 4.7, previous: 4.5, trend: "up" },
+                    { type: "售后服务", current: 4.1, previous: 4.2, trend: "down" },
+                    { type: "综合评价", current: 4.6, previous: 4.4, trend: "up" },
+                  ].map((item, index) => (
+                    <div key={index} className="text-center p-4 bg-gray-50 rounded-lg">
+                      <div className="text-sm text-gray-600 mb-1">{item.type}</div>
+                      <div className="text-2xl font-bold text-gray-900 mb-1">{item.current}</div>
+                      <div
+                        className={`text-xs flex items-center justify-center gap-1 ${
+                          item.trend === "up" ? "text-green-600" : "text-red-600"
+                        }`}
+                      >
+                        <TrendingUp className={`h-3 w-3 ${item.trend === "down" ? "rotate-180" : ""}`} />
+                        {item.trend === "up" ? "+" : ""}
+                        {(item.current - item.previous).toFixed(1)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
           </TabsContent>
 
           {/* 改进措施 */}
           <TabsContent value="improvements" className="space-y-6">
-            <Card>
+            <Card className="border-l-4 border-l-purple-500 hover:shadow-xl transition-all duration-300">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Award className="h-5 w-5 text-purple-600" />
+                <CardTitle className="flex items-center gap-2 text-purple-600">
+                  <Award className="h-5 w-5" />
                   改进措施跟踪
                 </CardTitle>
                 <CardDescription>基于客户反馈制定的改进措施和执行进度</CardDescription>
@@ -593,7 +769,10 @@ export default function SatisfactionPage() {
               <CardContent>
                 <div className="space-y-4">
                   {improvements.map((improvement) => (
-                    <div key={improvement.id} className="flex items-start gap-4 p-4 bg-gray-50 rounded-lg">
+                    <div
+                      key={improvement.id}
+                      className="flex items-start gap-4 p-4 bg-gray-50 rounded-lg hover:shadow-md transition-all duration-300"
+                    >
                       <div className="flex items-center gap-2">
                         <div className="w-8 h-8 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center text-sm font-medium">
                           {improvement.id}
@@ -607,17 +786,36 @@ export default function SatisfactionPage() {
                             {getImprovementStatusBadge(improvement.status)}
                           </div>
                         </div>
-                        <p className="text-sm text-gray-600 mb-2">{improvement.description}</p>
+                        <p className="text-sm text-gray-600 mb-3">{improvement.description}</p>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
+                          <div>
+                            <div className="text-xs text-gray-500">预期影响</div>
+                            <div className="text-sm font-medium text-green-600">{improvement.impact}</div>
+                          </div>
+                          <div>
+                            <div className="text-xs text-gray-500">负责团队</div>
+                            <div className="text-sm font-medium">{improvement.responsible}</div>
+                          </div>
+                          <div>
+                            <div className="text-xs text-gray-500">投入预算</div>
+                            <div className="text-sm font-medium">{formatCurrency(improvement.budget)}</div>
+                          </div>
+                          <div>
+                            <div className="text-xs text-gray-500">预期ROI</div>
+                            <div className="text-sm font-medium text-blue-600">{improvement.roi}x</div>
+                          </div>
+                        </div>
                         <div className="flex items-center justify-between">
-                          <div className="text-sm text-green-600 font-medium">{improvement.impact}</div>
-                          <div className="text-xs text-gray-500">实施日期：{improvement.implementDate}</div>
+                          <div className="text-xs text-gray-500">
+                            分类：{improvement.category} | 实施日期：{improvement.implementDate}
+                          </div>
                         </div>
                       </div>
                       <div className="flex gap-1">
-                        <Button size="sm" variant="ghost">
+                        <Button size="sm" variant="ghost" className="hover:shadow-md transition-all duration-300">
                           <Edit className="h-4 w-4" />
                         </Button>
-                        <Button size="sm" variant="ghost">
+                        <Button size="sm" variant="ghost" className="hover:shadow-md transition-all duration-300">
                           <Eye className="h-4 w-4" />
                         </Button>
                       </div>
@@ -625,13 +823,41 @@ export default function SatisfactionPage() {
                   ))}
                 </div>
                 <div className="flex justify-center mt-6">
-                  <Button>
+                  <Button className="hover:shadow-xl transition-all duration-300">
                     <Plus className="h-4 w-4 mr-2" />
                     添加改进措施
                   </Button>
                 </div>
               </CardContent>
             </Card>
+
+            {/* 改进效果统计 */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <Card className="border-l-4 border-l-green-500 hover:shadow-xl transition-all duration-300">
+                <CardContent className="p-6 text-center">
+                  <CheckCircle className="h-8 w-8 text-green-600 mx-auto mb-2" />
+                  <div className="text-2xl font-bold text-green-600">8</div>
+                  <div className="text-sm text-gray-600">已完成措施</div>
+                  <div className="text-xs text-green-600 mt-1">平均ROI: 3.2x</div>
+                </CardContent>
+              </Card>
+              <Card className="border-l-4 border-l-blue-500 hover:shadow-xl transition-all duration-300">
+                <CardContent className="p-6 text-center">
+                  <Clock className="h-8 w-8 text-blue-600 mx-auto mb-2" />
+                  <div className="text-2xl font-bold text-blue-600">12</div>
+                  <div className="text-sm text-gray-600">进行中措施</div>
+                  <div className="text-xs text-blue-600 mt-1">预计完成: 2个月</div>
+                </CardContent>
+              </Card>
+              <Card className="border-l-4 border-l-amber-500 hover:shadow-xl transition-all duration-300">
+                <CardContent className="p-6 text-center">
+                  <Calendar className="h-8 w-8 text-amber-600 mx-auto mb-2" />
+                  <div className="text-2xl font-bold text-amber-600">3</div>
+                  <div className="text-sm text-gray-600">计划中措施</div>
+                  <div className="text-xs text-amber-600 mt-1">预计投入: ¥230K</div>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
         </Tabs>
       </div>

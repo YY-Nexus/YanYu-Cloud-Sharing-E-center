@@ -281,7 +281,7 @@ export default function CostPage() {
                     </div>
                     <div className="flex items-center justify-between p-4 bg-green-50 rounded-lg">
                       <div>
-                        <h4 className="font-medium text-gray-900">绩效奖��</h4>
+                        <h4 className="font-medium text-gray-900">绩效奖����</h4>
                         <p className="text-sm text-gray-600">绩效考核奖励</p>
                       </div>
                       <div className="text-right">

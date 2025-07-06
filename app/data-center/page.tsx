@@ -1,227 +1,302 @@
 "use client"
 
-import { DashboardLayout } from "@/components/dashboard-layout"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
-import { Database, Users, Target, Star, BarChart3, ArrowRight, Cloud, TrendingUp, Activity } from "lucide-react"
-import Link from "next/link"
+import {
+  BarChart3,
+  Users,
+  Target,
+  Star,
+  ArrowRight,
+  Database,
+  UserCheck,
+  TrendingUp,
+  Cloud,
+  Play,
+  BookOpen,
+  Activity,
+  Settings,
+  Shield,
+  Zap,
+} from "lucide-react"
 
 export default function DataCenterPage() {
-  const dataMetrics = [
-    {
-      title: "数据处理量",
-      value: "2.4TB",
-      change: "+12%",
-      description: "较上月增长",
-      icon: BarChart3,
-      color: "blue",
-    },
-    {
-      title: "活跃用户",
-      value: "1,247",
-      change: "+8%",
-      description: "本月新增",
-      icon: Users,
-      color: "amber",
-    },
-    {
-      title: "任务完成率",
-      value: "94.2%",
-      change: "+5%",
-      description: "效率提升",
-      icon: Target,
-      color: "blue",
-    },
-    {
-      title: "客户满意度",
-      value: "4.8",
-      change: "+0.3",
-      description: "五星评价",
-      icon: Star,
-      color: "blue",
-    },
-  ]
-
-  const coreModules = [
-    {
-      title: "数据中心",
-      description: "数据分析决策",
-      icon: BarChart3,
-      href: "/data-center/collection",
-      color: "emerald",
-      bgColor: "bg-emerald-100",
-      iconColor: "text-emerald-600",
-    },
-    {
-      title: "组织管理",
-      description: "人力资源体系",
-      icon: Users,
-      href: "/organization",
-      color: "amber",
-      bgColor: "bg-amber-100",
-      iconColor: "text-amber-600",
-    },
-    {
-      title: "绩效激励",
-      description: "目标考核体系",
-      icon: Target,
-      href: "/performance",
-      color: "amber",
-      bgColor: "bg-amber-100",
-      iconColor: "text-amber-600",
-    },
-  ]
-
   return (
-    <DashboardLayout>
-      <div className="space-y-8">
-        {/* 欢迎区域 */}
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-600 via-blue-700 to-purple-800 p-8 text-white">
-          <div className="relative z-10 flex items-center justify-between">
-            <div className="max-w-2xl">
-              <h1 className="text-4xl font-bold mb-4">欢迎使用 YanYu Cloud Sharing E-center</h1>
-              <p className="text-xl text-blue-100 mb-8 leading-relaxed">
-                智能管理系统，为您的企业提供全方位的数据分析、组织管理、绩效激励等解决方案
-              </p>
-              <div className="flex gap-4">
-                <Button size="lg" className="bg-white text-blue-700 hover:bg-blue-50 font-semibold px-8">
-                  开始探索
-                  <ArrowRight className="w-5 h-5 ml-2" />
-                </Button>
-                <Button
-                  size="lg"
-                  variant="outline"
-                  className="border-white text-white hover:bg-white hover:text-blue-700 font-semibold px-8 bg-transparent"
-                >
-                  查看文档
-                </Button>
-              </div>
-            </div>
-            <div className="hidden lg:block">
-              <div className="relative">
-                <Cloud className="w-32 h-32 text-blue-300 opacity-80" />
-                <div className="absolute inset-0 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full blur-xl opacity-30" />
-              </div>
-            </div>
-          </div>
-          <div className="absolute inset-0 bg-gradient-to-r from-blue-600/20 to-purple-600/20" />
-          <div className="absolute -top-4 -right-4 w-24 h-24 bg-white/10 rounded-full blur-xl" />
-          <div className="absolute -bottom-8 -left-8 w-32 h-32 bg-purple-500/20 rounded-full blur-2xl" />
-        </div>
-
-        {/* 数据指标 */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {dataMetrics.map((metric, index) => {
-            const IconComponent = metric.icon
-            return (
-              <Card key={index} className="hover-lift border-l-4 border-l-blue-500">
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="p-2 rounded-lg bg-blue-100">
-                      <IconComponent className="w-5 h-5 text-blue-600" />
-                    </div>
-                    <Badge variant="secondary" className="text-emerald-600">
-                      {metric.change}
-                    </Badge>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-slate-600 mb-1">{metric.title}</p>
-                    <p className="text-3xl font-bold text-slate-800 mb-1">{metric.value}</p>
-                    <p className="text-sm text-slate-500">{metric.description}</p>
-                  </div>
-                  <div className="mt-4 h-2 bg-slate-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full transition-all duration-500"
-                      style={{ width: "75%" }}
-                    />
-                  </div>
-                </CardContent>
-              </Card>
-            )
-          })}
-        </div>
-
-        {/* 核心功能模块 */}
-        <div>
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold text-slate-800">核心功能模块</h2>
-            <Button variant="ghost" className="text-blue-600 hover:text-blue-700">
-              查看全部
-              <ArrowRight className="w-4 h-4 ml-2" />
+    <div className="min-h-screen bg-gray-50">
+      {/* 欢迎区域 */}
+      <div className="relative bg-gradient-to-br from-blue-600 via-blue-700 to-purple-800 text-white p-8 mb-8 rounded-lg mx-6 mt-6 overflow-hidden">
+        <div className="relative z-10 max-w-4xl">
+          <h1 className="text-4xl font-bold mb-4">欢迎使用 YanYu Cloud Sharing E-center</h1>
+          <p className="text-xl mb-8 text-blue-100">
+            智能管理系统，为您的企业提供全方位的数据分析、组织管理、绩效激励等解决方案
+          </p>
+          <div className="flex gap-4">
+            <Button
+              size="lg"
+              className="bg-white text-blue-700 hover:bg-blue-50 font-semibold px-8 py-3 rounded-lg shadow-lg hover-lift"
+            >
+              <Play className="w-5 h-5 mr-2" />
+              开始探索
+            </Button>
+            <Button
+              size="lg"
+              variant="outline"
+              className="border-white text-white hover:bg-white hover:text-blue-700 font-semibold px-8 py-3 rounded-lg shadow-lg hover-lift bg-transparent"
+            >
+              <BookOpen className="w-5 h-5 mr-2" />
+              查看文档
             </Button>
           </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {coreModules.map((module, index) => {
-              const IconComponent = module.icon
-              return (
-                <Link key={index} href={module.href}>
-                  <Card className="hover-lift border-l-4 border-l-blue-500 cursor-pointer transition-all duration-300 hover:shadow-xl">
-                    <CardContent className="p-6">
-                      <div className="flex items-center gap-4">
-                        <div className={`p-3 rounded-xl ${module.bgColor}`}>
-                          <IconComponent className={`w-8 h-8 ${module.iconColor}`} />
-                        </div>
-                        <div>
-                          <h3 className="text-lg font-semibold text-slate-800 mb-1">{module.title}</h3>
-                          <p className="text-sm text-slate-600">{module.description}</p>
-                        </div>
-                      </div>
-                      <div className="mt-4 flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Activity className="w-4 h-4 text-emerald-500" />
-                          <span className="text-sm text-emerald-600 font-medium">运行中</span>
-                        </div>
-                        <ArrowRight className="w-4 h-4 text-slate-400" />
-                      </div>
-                    </CardContent>
-                  </Card>
-                </Link>
-              )
-            })}
-          </div>
         </div>
 
-        {/* 快速操作区域 */}
-        <Card className="hover-lift">
+        {/* 装饰性云朵图标 */}
+        <div className="absolute top-8 right-8 opacity-20">
+          <Cloud className="w-32 h-32" />
+        </div>
+        <div className="absolute bottom-4 right-24 opacity-10">
+          <Cloud className="w-20 h-20" />
+        </div>
+      </div>
+
+      {/* 数据指标卡片 */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 px-6 mb-8">
+        <Card className="card-gradient-blue hover-lift">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-100 rounded-lg">
+                  <BarChart3 className="w-6 h-6 text-blue-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">数据处理量</p>
+                  <p className="text-2xl font-bold text-gray-900">2.4TB</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Progress value={75} className="flex-1 h-2" />
+              <Badge variant="secondary" className="text-green-600 bg-green-100">
+                +12%
+              </Badge>
+            </div>
+            <p className="text-xs text-gray-500 mt-2">较上月增长</p>
+          </CardContent>
+        </Card>
+
+        <Card className="card-gradient-blue hover-lift">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-amber-100 rounded-lg">
+                  <Users className="w-6 h-6 text-amber-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">活跃用户</p>
+                  <p className="text-2xl font-bold text-gray-900">1,247</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Progress value={68} className="flex-1 h-2" />
+              <Badge variant="secondary" className="text-green-600 bg-green-100">
+                +8%
+              </Badge>
+            </div>
+            <p className="text-xs text-gray-500 mt-2">本月新增</p>
+          </CardContent>
+        </Card>
+
+        <Card className="card-gradient-blue hover-lift">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-emerald-100 rounded-lg">
+                  <Target className="w-6 h-6 text-emerald-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">任务完成率</p>
+                  <p className="text-2xl font-bold text-gray-900">94.2%</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Progress value={94} className="flex-1 h-2" />
+              <Badge variant="secondary" className="text-green-600 bg-green-100">
+                +5%
+              </Badge>
+            </div>
+            <p className="text-xs text-gray-500 mt-2">效率提升</p>
+          </CardContent>
+        </Card>
+
+        <Card className="card-gradient-blue hover-lift">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-purple-100 rounded-lg">
+                  <Star className="w-6 h-6 text-purple-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">客户满意度</p>
+                  <p className="text-2xl font-bold text-gray-900">4.8</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Progress value={96} className="flex-1 h-2" />
+              <Badge variant="secondary" className="text-green-600 bg-green-100">
+                +0.3
+              </Badge>
+            </div>
+            <p className="text-xs text-gray-500 mt-2">五星评价</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* 核心功能模块 */}
+      <div className="px-6 mb-8">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-bold text-gray-900">核心功能模块</h2>
+          <Button variant="ghost" className="text-blue-600 hover:text-blue-700">
+            查看全部
+            <ArrowRight className="w-4 h-4 ml-2" />
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <Card className="card-gradient-emerald hover-lift cursor-pointer">
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-emerald-100 rounded-xl">
+                  <BarChart3 className="w-8 h-8 text-emerald-600" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg text-gray-900">数据中心</CardTitle>
+                  <p className="text-sm text-gray-600">数据分析决策</p>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-gray-600 mb-4">
+                提供全面的数据收集、处理、分析和可视化功能，支持智能决策制定。
+              </p>
+              <div className="flex items-center justify-between">
+                <Badge variant="secondary" className="bg-emerald-100 text-emerald-700">
+                  6个子模块
+                </Badge>
+                <ArrowRight className="w-4 h-4 text-emerald-600" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="card-gradient-amber hover-lift cursor-pointer">
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-amber-100 rounded-xl">
+                  <UserCheck className="w-8 h-8 text-amber-600" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg text-gray-900">组织管理</CardTitle>
+                  <p className="text-sm text-gray-600">人力资源体系</p>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-gray-600 mb-4">完整的人力资源管理解决方案，涵盖招聘、培训、考勤等各个环节。</p>
+              <div className="flex items-center justify-between">
+                <Badge variant="secondary" className="bg-amber-100 text-amber-700">
+                  8个子模块
+                </Badge>
+                <ArrowRight className="w-4 h-4 text-amber-600" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="card-gradient-purple hover-lift cursor-pointer">
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-purple-100 rounded-xl">
+                  <TrendingUp className="w-8 h-8 text-purple-600" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg text-gray-900">绩效激励</CardTitle>
+                  <p className="text-sm text-gray-600">目标考核体系</p>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-gray-600 mb-4">科学的绩效评估和激励机制，促进员工发展和组织目标达成。</p>
+              <div className="flex items-center justify-between">
+                <Badge variant="secondary" className="bg-purple-100 text-purple-700">
+                  5个子模块
+                </Badge>
+                <ArrowRight className="w-4 h-4 text-purple-600" />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      {/* 快速操作区域 */}
+      <div className="px-6 mb-8">
+        <h2 className="text-2xl font-bold text-gray-900 mb-6">快速操作</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Button variant="outline" className="h-20 flex-col gap-2 hover-lift bg-transparent">
+            <Database className="w-6 h-6 text-blue-600" />
+            <span className="text-sm">数据导入</span>
+          </Button>
+          <Button variant="outline" className="h-20 flex-col gap-2 hover-lift bg-transparent">
+            <Activity className="w-6 h-6 text-green-600" />
+            <span className="text-sm">实时监控</span>
+          </Button>
+          <Button variant="outline" className="h-20 flex-col gap-2 hover-lift bg-transparent">
+            <Settings className="w-6 h-6 text-purple-600" />
+            <span className="text-sm">系统设置</span>
+          </Button>
+          <Button variant="outline" className="h-20 flex-col gap-2 hover-lift bg-transparent">
+            <Shield className="w-6 h-6 text-red-600" />
+            <span className="text-sm">安全审计</span>
+          </Button>
+        </div>
+      </div>
+
+      {/* 系统状态 */}
+      <div className="px-6">
+        <Card className="bg-gradient-to-r from-gray-50 to-gray-100 border-l-4 border-gray-400">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-blue-600" />
-              快速操作
+            <CardTitle className="flex items-center gap-2 text-gray-900">
+              <Zap className="w-5 h-5 text-yellow-500" />
+              系统状态
             </CardTitle>
-            <CardDescription>常用功能快速入口，提升工作效率</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <Link href="/data-center/collection">
-                <Button variant="outline" className="w-full h-16 flex-col gap-2 bg-transparent">
-                  <Database className="w-5 h-5" />
-                  <span className="text-sm">数据采集</span>
-                </Button>
-              </Link>
-              <Link href="/data-center/visualization">
-                <Button variant="outline" className="w-full h-16 flex-col gap-2 bg-transparent">
-                  <BarChart3 className="w-5 h-5" />
-                  <span className="text-sm">数据可视化</span>
-                </Button>
-              </Link>
-              <Link href="/data-center/security-audit">
-                <Button variant="outline" className="w-full h-16 flex-col gap-2 bg-transparent">
-                  <Activity className="w-5 h-5" />
-                  <span className="text-sm">安全审计</span>
-                </Button>
-              </Link>
-              <Link href="/data-center/quality">
-                <Button variant="outline" className="w-full h-16 flex-col gap-2 bg-transparent">
-                  <Target className="w-5 h-5" />
-                  <span className="text-sm">质量管理</span>
-                </Button>
-              </Link>
+              <div className="text-center">
+                <div className="w-3 h-3 bg-green-500 rounded-full mx-auto mb-2"></div>
+                <p className="text-sm font-medium">数据服务</p>
+                <p className="text-xs text-gray-500">正常运行</p>
+              </div>
+              <div className="text-center">
+                <div className="w-3 h-3 bg-green-500 rounded-full mx-auto mb-2"></div>
+                <p className="text-sm font-medium">API接口</p>
+                <p className="text-xs text-gray-500">响应正常</p>
+              </div>
+              <div className="text-center">
+                <div className="w-3 h-3 bg-yellow-500 rounded-full mx-auto mb-2"></div>
+                <p className="text-sm font-medium">存储空间</p>
+                <p className="text-xs text-gray-500">使用率78%</p>
+              </div>
+              <div className="text-center">
+                <div className="w-3 h-3 bg-green-500 rounded-full mx-auto mb-2"></div>
+                <p className="text-sm font-medium">网络连接</p>
+                <p className="text-xs text-gray-500">连接稳定</p>
+              </div>
             </div>
           </CardContent>
         </Card>
       </div>
-    </DashboardLayout>
+    </div>
   )
 }
