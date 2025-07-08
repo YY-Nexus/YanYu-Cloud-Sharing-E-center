@@ -2,770 +2,572 @@
 
 import type React from "react"
 
-import { useState, useEffect, useRef } from "react"
-import { useRouter } from "next/navigation"
+import { useState, useRef, useEffect } from "react"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Textarea } from "@/components/ui/textarea"
 import {
-  Send,
+  Search,
   Mic,
-  Paperclip,
   Camera,
-  Settings,
-  GraduationCap,
-  Globe,
-  History,
-  Clock,
-  X,
-  Heart,
-  MessageSquare,
+  Upload,
+  Sparkles,
   Brain,
+  BookOpen,
   Users,
   BarChart3,
-  MicOff,
-  Sparkles,
-  Target,
-  Trophy,
-  Calendar,
+  Settings,
+  History,
+  Star,
+  Zap,
+  MessageSquare,
   FileText,
-  Video,
-  Headphones,
-  Map,
-  Lightbulb,
-  MoreHorizontal,
+  ImageIcon,
+  Palette,
+  Sun,
+  Moon,
 } from "lucide-react"
-import { HistoryManager, type SearchHistory } from "@/lib/history"
+import { useRouter } from "next/navigation"
+import { useTheme } from "next-themes"
+
+interface SearchHistory {
+  id: string
+  query: string
+  timestamp: Date
+  type: "text" | "voice" | "image" | "file"
+  results?: number
+}
+
+interface QuickAction {
+  id: string
+  title: string
+  description: string
+  icon: any
+  color: string
+  path: string
+}
 
 export default function HomePage() {
-  const [question, setQuestion] = useState("")
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [showWelcomeAnimation, setShowWelcomeAnimation] = useState(true)
-  const [showBubble, setShowBubble] = useState(false)
-  const [bubbleText, setBubbleText] = useState("")
-  const [bubbleIndex, setBubbleIndex] = useState(0)
-  const [showHistory, setShowHistory] = useState(false)
+  const [query, setQuery] = useState("")
+  const [isListening, setIsListening] = useState(false)
   const [searchHistory, setSearchHistory] = useState<SearchHistory[]>([])
-  const [filteredHistory, setFilteredHistory] = useState<SearchHistory[]>([])
-  const [isRecording, setIsRecording] = useState(false)
-  const [showFileUpload, setShowFileUpload] = useState(false)
-  const [showMoreTools, setShowMoreTools] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const imageInputRef = useRef<HTMLInputElement>(null)
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [dragActive, setDragActive] = useState(false)
+
   const router = useRouter()
+  const { theme, setTheme } = useTheme()
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
 
-  // 多元化友好对话内容
-  const friendlyMessages = [
-    "你好！我是你的AI学习伙伴 🎓",
-    "准备好开始学习之旅了吗？✨",
-    "有什么想要探索的知识吗？🔍",
-    "让我们一起发现新的可能性！🚀",
-    "今天想学点什么有趣的？💡",
-    "我在这里帮助你解答疑问 🤝",
-    "准备好迎接知识的惊喜了吗？🎉",
-    "让我们开启智慧的大门吧！🌟",
-    "每个问题都是新发现的开始 🔬",
-    "知识的海洋等待我们探索 🌊",
+  // 快捷操作配置
+  const quickActions: QuickAction[] = [
+    {
+      id: "search",
+      title: "智能搜索",
+      description: "AI驱动的智能搜索引擎",
+      icon: Search,
+      color: "bg-blue-500",
+      path: "/search",
+    },
+    {
+      id: "chat",
+      title: "AI对话",
+      description: "与AI助手进行深度对话",
+      icon: MessageSquare,
+      color: "bg-green-500",
+      path: "/ai-assistant",
+    },
+    {
+      id: "mindmap",
+      title: "思维导图",
+      description: "生成知识思维导图",
+      icon: Brain,
+      color: "bg-purple-500",
+      path: "/generate/mindmap",
+    },
+    {
+      id: "learning",
+      title: "学习路径",
+      description: "个性化学习计划制定",
+      icon: BookOpen,
+      color: "bg-orange-500",
+      path: "/learning-path/create",
+    },
+    {
+      id: "community",
+      title: "知识社区",
+      description: "与他人分享和讨论",
+      icon: Users,
+      color: "bg-pink-500",
+      path: "/community",
+    },
+    {
+      id: "analytics",
+      title: "学习分析",
+      description: "查看学习进度和统计",
+      icon: BarChart3,
+      color: "bg-indigo-500",
+      path: "/analytics",
+    },
+    {
+      id: "poster",
+      title: "海报生成",
+      description: "AI生成精美海报",
+      icon: Palette,
+      color: "bg-red-500",
+      path: "/generate/poster",
+    },
+    {
+      id: "ppt",
+      title: "PPT制作",
+      description: "智能PPT生成工具",
+      icon: FileText,
+      color: "bg-yellow-500",
+      path: "/generate/ppt",
+    },
   ]
 
-  // 未开发功能列表
-  const moreTools = [
-    { id: "practice", name: "智能练习", icon: Target, description: "个性化练习模式" },
-    { id: "achievements", name: "成就系统", icon: Trophy, description: "学习成就追踪" },
-    { id: "schedule", name: "学习计划", icon: Calendar, description: "智能学习安排" },
-    { id: "notes", name: "笔记管理", icon: FileText, description: "知识笔记整理" },
-    { id: "videos", name: "视频学习", icon: Video, description: "视频课程资源" },
-    { id: "audio", name: "音频学习", icon: Headphones, description: "音频内容播放" },
-    { id: "inspiration", name: "灵感收集", icon: Lightbulb, description: "创意想法记录" },
-    { id: "ai-assistant", name: "AI助手", icon: Sparkles, description: "高级AI功能" },
-    { id: "global-resources", name: "全球资源", icon: Globe, description: "国际学习资源" },
+  // 热门搜索标签
+  const trendingTags = [
+    "人工智能",
+    "机器学习",
+    "深度学习",
+    "自然语言处理",
+    "计算机视觉",
+    "数据科学",
+    "Python编程",
+    "前端开发",
+    "区块链技术",
+    "量子计算",
+    "生物信息学",
+    "云计算",
   ]
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!question.trim()) return
+  useEffect(() => {
+    // 加载搜索历史
+    loadSearchHistory()
 
-    setIsSubmitting(true)
+    // 注册Service Worker
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker
+        .register("/sw.js")
+        .then((registration) => {
+          console.log("SW registered: ", registration)
+        })
+        .catch((registrationError) => {
+          console.log("SW registration failed: ", registrationError)
+        })
+    }
+  }, [])
 
-    try {
-      // 添加到历史记录
-      HistoryManager.addHistory(question.trim())
-
-      // 跳转到思考过程页面
-      router.push(`/thinking?q=${encodeURIComponent(question.trim())}`)
-    } catch (error) {
-      console.error("提交问题失败:", error)
-      setIsSubmitting(false)
+  const loadSearchHistory = () => {
+    const saved = localStorage.getItem("searchHistory")
+    if (saved) {
+      const parsed = JSON.parse(saved).map((item: any) => ({
+        ...item,
+        timestamp: new Date(item.timestamp),
+      }))
+      setSearchHistory(parsed.slice(0, 5)) // 只显示最近5条
     }
   }
 
-  const handleHistoryClick = (historyItem: SearchHistory) => {
-    if (historyItem && historyItem.question) {
-      setQuestion(historyItem.question)
-      setShowHistory(false)
+  const saveToHistory = (query: string, type: "text" | "voice" | "image" | "file") => {
+    const newEntry: SearchHistory = {
+      id: Date.now().toString(),
+      query,
+      timestamp: new Date(),
+      type,
+      results: Math.floor(Math.random() * 1000) + 100,
     }
+
+    const updated = [newEntry, ...searchHistory].slice(0, 10)
+    setSearchHistory(updated)
+    localStorage.setItem("searchHistory", JSON.stringify(updated))
   }
 
-  const handleDeleteHistory = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation()
-    try {
-      HistoryManager.removeHistory(id)
-      loadHistory()
-    } catch (error) {
-      console.error("删除历史记录失败:", error)
-    }
-  }
+  const handleSearch = async (searchQuery?: string, type: "text" | "voice" | "image" | "file" = "text") => {
+    const finalQuery = searchQuery || query
+    if (!finalQuery.trim() && !selectedFile) return
 
-  const loadHistory = () => {
-    try {
-      const history = HistoryManager.getHistory()
-      setSearchHistory(history)
-      setFilteredHistory(history)
-    } catch (error) {
-      console.error("加载历史记录失败:", error)
-      setSearchHistory([])
-      setFilteredHistory([])
-    }
-  }
-
-  const handleQuestionChange = (value: string) => {
-    setQuestion(value)
+    setIsLoading(true)
 
     try {
-      // 实时搜索历史记录
-      if (value && value.trim()) {
-        const filtered = HistoryManager.searchHistory(value.trim())
-        setFilteredHistory(Array.isArray(filtered) ? filtered.slice(0, 5) : [])
-      } else {
-        const recent = HistoryManager.getRecentHistory(10)
-        setFilteredHistory(Array.isArray(recent) ? recent : [])
-      }
-    } catch (error) {
-      console.error("搜索历史记录失败:", error)
-      setFilteredHistory([])
-    }
-  }
+      // 保存到历史记录
+      saveToHistory(finalQuery || selectedFile?.name || "文件搜索", type)
 
-  // 语音输入功能
-  const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const mediaRecorder = new MediaRecorder(stream)
-      mediaRecorderRef.current = mediaRecorder
+      // 跳转到思考页面
+      const params = new URLSearchParams({
+        q: finalQuery,
+        type: type,
+      })
 
-      const audioChunks: BlobPart[] = []
-      mediaRecorder.ondataavailable = (event) => {
-        audioChunks.push(event.data)
+      if (selectedFile) {
+        // 这里应该上传文件并获取URL
+        params.append("file", selectedFile.name)
       }
 
-      mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunks, { type: "audio/wav" })
-        // 这里可以调用语音识别API
-        handleVoiceRecognition(audioBlob)
-        stream.getTracks().forEach((track) => track.stop())
-      }
-
-      mediaRecorder.start()
-      setIsRecording(true)
+      router.push(`/thinking?${params.toString()}`)
     } catch (error) {
-      console.error("无法访问麦克风:", error)
-      alert("无法访问麦克风，请检查权限设置")
+      console.error("搜索失败:", error)
+    } finally {
+      setIsLoading(false)
     }
   }
 
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop()
-      setIsRecording(false)
+  const handleVoiceSearch = async () => {
+    if (!("webkitSpeechRecognition" in window) && !("SpeechRecognition" in window)) {
+      alert("您的浏览器不支持语音识别功能")
+      return
     }
+
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    const recognition = new SpeechRecognition()
+
+    recognition.lang = "zh-CN"
+    recognition.continuous = false
+    recognition.interimResults = false
+
+    recognition.onstart = () => {
+      setIsListening(true)
+    }
+
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript
+      setQuery(transcript)
+      handleSearch(transcript, "voice")
+    }
+
+    recognition.onerror = (event: any) => {
+      console.error("语音识别错误:", event.error)
+      setIsListening(false)
+    }
+
+    recognition.onend = () => {
+      setIsListening(false)
+    }
+
+    recognition.start()
   }
 
-  const handleVoiceRecognition = async (audioBlob: Blob) => {
-    try {
-      // 模拟语音识别结果
-      const mockTranscription = "这是语音识别的结果示例"
-      setQuestion(mockTranscription)
-    } catch (error) {
-      console.error("语音识别失败:", error)
-    }
-  }
-
-  // 文件上传功能
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (file) {
-      try {
-        // 处理文件上传
-        const fileName = file.name
-        setQuestion(`请分析这个文件：${fileName}`)
-        setShowFileUpload(false)
-      } catch (error) {
-        console.error("文件上传失败:", error)
-      }
+      setSelectedFile(file)
+      setQuery(`分析文件: ${file.name}`)
     }
   }
 
-  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (file) {
-      try {
-        // 处理图片上传
-        const fileName = file.name
-        setQuestion(`请分析这张图片：${fileName}`)
-      } catch (error) {
-        console.error("图片上传失败:", error)
-      }
-    }
-  }
-
-  // 主要功能处理
-  const handleMainMenuClick = (action: string) => {
+  const handleCameraCapture = async () => {
     try {
-      switch (action) {
-        case "community":
-          router.push("/community")
-          break
-        case "knowledge-graph":
-          router.push("/knowledge-graph")
-          break
-        case "learning-path":
-          router.push("/learning-path/create")
-          break
-        case "mindmap":
-          router.push("/generate/mindmap")
-          break
-        default:
-          break
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true })
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream
+        videoRef.current.play()
       }
     } catch (error) {
-      console.error("导航失败:", error)
+      console.error("摄像头访问失败:", error)
+      alert("无法访问摄像头，请检查权限设置")
     }
   }
 
-  // 更多工具功能处理
-  const handleMoreToolClick = (toolId: string) => {
-    try {
-      const tool = moreTools.find((t) => t.id === toolId)
-      if (tool) {
-        alert(`${tool.name}功能正在开发中...`)
-      }
-      setShowMoreTools(false)
-    } catch (error) {
-      console.error("工具点击失败:", error)
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true)
+    } else if (e.type === "dragleave") {
+      setDragActive(false)
     }
   }
 
-  const formatTime = (timestamp: number) => {
-    try {
-      if (!timestamp || typeof timestamp !== "number") return "未知时间"
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragActive(false)
 
-      const now = Date.now()
-      const diff = now - timestamp
-      const minutes = Math.floor(diff / (1000 * 60))
-      const hours = Math.floor(diff / (1000 * 60 * 60))
-      const days = Math.floor(diff / (1000 * 60 * 60 * 24))
-
-      if (minutes < 1) return "刚刚"
-      if (minutes < 60) return `${minutes}分钟前`
-      if (hours < 24) return `${hours}小时前`
-      if (days < 7) return `${days}天前`
-      return new Date(timestamp).toLocaleDateString("zh-CN")
-    } catch (error) {
-      console.error("时间格式化失败:", error)
-      return "未知时间"
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      const file = e.dataTransfer.files[0]
+      setSelectedFile(file)
+      setQuery(`分析文件: ${file.name}`)
     }
   }
 
-  useEffect(() => {
-    try {
-      // 动画序列：3秒后开始弹跳，弹跳完成后显示气泡
-      const animationTimer = setTimeout(() => {
-        setShowWelcomeAnimation(false)
-      }, 3000)
+  const handleQuickAction = (action: QuickAction) => {
+    router.push(action.path)
+  }
 
-      const bubbleTimer = setTimeout(() => {
-        setShowBubble(true)
-        setBubbleText(friendlyMessages[0])
-      }, 4000)
-
-      // 每5秒切换一次友好消息
-      const messageInterval = setInterval(() => {
-        if (showBubble) {
-          setBubbleIndex((prev) => {
-            const nextIndex = (prev + 1) % friendlyMessages.length
-            setBubbleText(friendlyMessages[nextIndex])
-            return nextIndex
-          })
-        }
-      }, 5000)
-
-      // 加载历史记录
-      loadHistory()
-
-      return () => {
-        clearTimeout(animationTimer)
-        clearTimeout(bubbleTimer)
-        clearInterval(messageInterval)
-      }
-    } catch (error) {
-      console.error("初始化失败:", error)
-    }
-  }, [showBubble])
+  const handleTrendingTag = (tag: string) => {
+    setQuery(tag)
+    handleSearch(tag)
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50 relative overflow-hidden">
-      {/* AI角色动画 - 向上移动110px */}
-      <div
-        className={`fixed z-50 transition-all duration-1000 ease-out ${
-          showWelcomeAnimation
-            ? "top-4 left-1/2 transform -translate-x-1/2 scale-50"
-            : "left-1/2 transform -translate-x-1/2 scale-100"
-        }`}
-        style={{
-          top: showWelcomeAnimation ? "1rem" : "calc(50% - 110px)",
-          animation: showWelcomeAnimation ? "none" : "bounce-in 1s ease-out",
-        }}
-      >
-        {/* AI角色图片 - 使用新提供的图片 */}
-        <div className="relative">
-          <img
-            src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/8-2VgZzVLKblPRmH5bcKQzcTtVV56Nxu.png"
-            alt="AI助手"
-            className="w-32 h-32 drop-shadow-2xl"
-            style={{
-              filter: "drop-shadow(0 10px 20px rgba(59, 130, 246, 0.3))",
-            }}
-          />
-
-          {/* 友好气泡对话 - 多元化内容 */}
-          {showBubble && (
-            <div
-              className="absolute -top-16 -left-8 bg-white rounded-2xl px-4 py-3 shadow-lg border-2 border-blue-200 animate-bubble-in min-w-[280px]"
-              style={{
-                animation: "bubble-in 0.5s ease-out",
-              }}
-            >
-              <div className="text-sm text-gray-700 font-medium text-center transition-all duration-500">
-                {bubbleText}
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+      {/* 顶部导航 */}
+      <header className="sticky top-0 z-50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-700">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center space-x-3">
+              <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+                <Sparkles className="w-5 h-5 text-white" />
               </div>
-              {/* 气泡尾巴 */}
-              <div className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-4 h-4 bg-white border-r-2 border-b-2 border-blue-200 rotate-45"></div>
+              <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                AI智能搜索平台
+              </h1>
             </div>
-          )}
 
-          {/* 信号波动画 */}
-          <div className="absolute -top-2 left-1/2 transform -translate-x-1/2">
-            <div className="flex space-x-1">
-              {[0, 1, 2].map((i) => (
-                <div
-                  key={i}
-                  className="w-1 h-3 bg-blue-500 rounded-full animate-pulse"
-                  style={{
-                    animationDelay: `${i * 0.2}s`,
-                    animationDuration: "1.5s",
-                  }}
-                ></div>
+            <div className="flex items-center space-x-4">
+              <Button variant="ghost" size="sm" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
+                {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+              </Button>
+
+              <Button variant="ghost" size="sm" onClick={() => router.push("/history")}>
+                <History className="w-4 h-4 mr-2" />
+                历史记录
+              </Button>
+
+              <Button variant="ghost" size="sm" onClick={() => router.push("/favorites")}>
+                <Star className="w-4 h-4 mr-2" />
+                收藏夹
+              </Button>
+
+              <Button variant="ghost" size="sm" onClick={() => router.push("/settings")}>
+                <Settings className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* 主搜索区域 */}
+        <div className="text-center mb-12">
+          <div className="mb-8">
+            <h2 className="text-4xl sm:text-5xl font-bold text-gray-900 dark:text-white mb-4">
+              探索无限
+              <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                知识世界
+              </span>
+            </h2>
+            <p className="text-xl text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
+              基于先进AI技术的智能搜索平台，为您提供精准答案和创意内容生成
+            </p>
+          </div>
+
+          {/* 搜索框 */}
+          <div className="max-w-4xl mx-auto mb-8">
+            <div
+              className={`relative bg-white dark:bg-gray-800 rounded-2xl shadow-xl border-2 transition-all duration-300 ${
+                dragActive ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20" : "border-gray-200 dark:border-gray-700"
+              }`}
+              onDragEnter={handleDrag}
+              onDragLeave={handleDrag}
+              onDragOver={handleDrag}
+              onDrop={handleDrop}
+            >
+              <div className="flex items-center p-4">
+                <div className="flex-1">
+                  <Textarea
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="输入您的问题，或拖拽文件到此处..."
+                    className="border-0 resize-none focus:ring-0 text-lg bg-transparent"
+                    rows={2}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault()
+                        handleSearch()
+                      }
+                    }}
+                  />
+                </div>
+
+                <div className="flex items-center space-x-2 ml-4">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleVoiceSearch}
+                    disabled={isListening}
+                    className={isListening ? "text-red-500 animate-pulse" : ""}
+                  >
+                    <Mic className="w-5 h-5" />
+                  </Button>
+
+                  <Button variant="ghost" size="sm" onClick={handleCameraCapture}>
+                    <Camera className="w-5 h-5" />
+                  </Button>
+
+                  <Button variant="ghost" size="sm" onClick={() => fileInputRef.current?.click()}>
+                    <Upload className="w-5 h-5" />
+                  </Button>
+
+                  <Button
+                    onClick={() => handleSearch()}
+                    disabled={isLoading || (!query.trim() && !selectedFile)}
+                    className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white px-6"
+                  >
+                    {isLoading ? (
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <Search className="w-5 h-5" />
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              {selectedFile && (
+                <div className="px-4 pb-4">
+                  <div className="flex items-center space-x-2 text-sm text-gray-600 dark:text-gray-400">
+                    <FileText className="w-4 h-4" />
+                    <span>已选择文件: {selectedFile.name}</span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSelectedFile(null)}
+                      className="text-red-500 hover:text-red-700"
+                    >
+                      移除
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              onChange={handleFileUpload}
+              className="hidden"
+              accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.md"
+            />
+          </div>
+
+          {/* 热门标签 */}
+          <div className="mb-8">
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">热门搜索:</p>
+            <div className="flex flex-wrap justify-center gap-2">
+              {trendingTags.map((tag) => (
+                <Badge
+                  key={tag}
+                  variant="secondary"
+                  className="cursor-pointer hover:bg-blue-100 hover:text-blue-700 dark:hover:bg-blue-900 dark:hover:text-blue-300 transition-colors"
+                  onClick={() => handleTrendingTag(tag)}
+                >
+                  {tag}
+                </Badge>
               ))}
             </div>
           </div>
         </div>
-      </div>
 
-      {/* 遮罩层 - 动画期间显示 */}
-      {showWelcomeAnimation && (
-        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40 flex items-center justify-center">
-          <div className="text-center text-white">
-            <div className="text-2xl font-bold mb-2">智能AI搜索</div>
-            <div className="text-sm opacity-80">正在为您准备最佳体验...</div>
-          </div>
-        </div>
-      )}
-
-      {/* 原有页面内容 - 动画完成后显示 */}
-      <div
-        className={`transition-opacity duration-1000 ${
-          showWelcomeAnimation ? "opacity-0 pointer-events-none" : "opacity-100"
-        }`}
-      >
-        {/* 顶部导航栏 */}
-        <header className="bg-blue-600 text-white px-4 py-3 flex items-center justify-between">
-          <h1 className="text-lg font-medium">智能AI搜索</h1>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => router.push("/conversations")}
-              className="p-2 hover:bg-blue-700 rounded transition-colors relative group"
-              title="对话记录"
-            >
-              <MessageSquare className="w-5 h-5" />
-              <span className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                对话记录
-              </span>
-            </button>
-            <button
-              onClick={() => {
-                setShowHistory(!showHistory)
-                if (!showHistory) loadHistory()
-              }}
-              className="p-2 hover:bg-blue-700 rounded transition-colors relative group"
-              title="搜索历史"
-            >
-              <History className="w-5 h-5" />
-              {searchHistory.length > 0 && (
-                <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full text-xs flex items-center justify-center">
-                  {searchHistory.length > 9 ? "9+" : searchHistory.length}
-                </div>
-              )}
-              <span className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                搜索历史
-              </span>
-            </button>
-            <button
-              onClick={() => router.push("/favorites")}
-              className="p-2 hover:bg-blue-700 rounded transition-colors relative group"
-              title="我的收藏"
-            >
-              <Heart className="w-5 h-5" />
-              <span className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                我的收藏
-              </span>
-            </button>
-            <button
-              onClick={() => router.push("/analytics")}
-              className="p-2 hover:bg-blue-700 rounded transition-colors relative group"
-              title="学习分析"
-            >
-              <BarChart3 className="w-5 h-5" />
-              <span className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                学习分析
-              </span>
-            </button>
-            <button className="p-2 hover:bg-blue-700 rounded transition-colors relative group" title="设置">
-              <Settings className="w-5 h-5" />
-              <span className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                设置
-              </span>
-            </button>
-          </div>
-        </header>
-
-        <div className="flex">
-          {/* 左侧菜单 - 简化设计 */}
-          <aside className="hidden md:block w-16 bg-white border-r border-gray-200 min-h-screen">
-            <nav className="flex flex-col items-center py-4 space-y-4">
-              {/* 主要功能 - 已开发 */}
-              <button
-                onClick={() => handleMainMenuClick("community")}
-                className="p-3 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all relative group"
-                title="学习社区"
-              >
-                <Users className="w-6 h-6" />
-                <span className="absolute left-16 top-1/2 transform -translate-y-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap ml-2">
-                  学习社区
-                </span>
-              </button>
-
-              <button
-                onClick={() => handleMainMenuClick("knowledge-graph")}
-                className="p-3 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all relative group"
-                title="知识图谱"
-              >
-                <Brain className="w-6 h-6" />
-                <span className="absolute left-16 top-1/2 transform -translate-y-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap ml-2">
-                  知识图谱
-                </span>
-              </button>
-
-              <button
-                onClick={() => handleMainMenuClick("learning-path")}
-                className="p-3 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all relative group"
-                title="学习路径"
-              >
-                <GraduationCap className="w-6 h-6" />
-                <span className="absolute left-16 top-1/2 transform -translate-y-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap ml-2">
-                  学习路径
-                </span>
-              </button>
-
-              <button
-                onClick={() => handleMainMenuClick("mindmap")}
-                className="p-3 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all relative group"
-                title="思维导图"
-              >
-                <Map className="w-6 h-6" />
-                <span className="absolute left-16 top-1/2 transform -translate-y-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap ml-2">
-                  思维导图
-                </span>
-              </button>
-
-              {/* 分隔线 */}
-              <div className="w-8 h-px bg-gray-200 my-2"></div>
-
-              {/* 更多工具 - 下拉菜单 */}
-              <div className="relative">
-                <button
-                  onClick={() => setShowMoreTools(!showMoreTools)}
-                  className="p-3 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all relative group"
-                  title="更多工具"
+        {/* 快捷操作网格 */}
+        <div className="mb-12">
+          <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-6 text-center">功能中心</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {quickActions.map((action) => {
+              const IconComponent = action.icon
+              return (
+                <Card
+                  key={action.id}
+                  className="cursor-pointer hover:shadow-lg transition-all duration-300 hover:scale-105 border-0 bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm"
+                  onClick={() => handleQuickAction(action)}
                 >
-                  <MoreHorizontal className="w-6 h-6" />
-                  <span className="absolute left-16 top-1/2 transform -translate-y-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap ml-2">
-                    更多工具
-                  </span>
-                </button>
-
-                {/* 下拉菜单 */}
-                {showMoreTools && (
-                  <div className="absolute left-16 top-0 bg-white border rounded-lg shadow-xl min-w-[200px] z-30 ml-2">
-                    <div className="p-2 border-b bg-gray-50 flex items-center justify-between">
-                      <h3 className="font-semibold text-gray-800 text-sm">更多工具</h3>
-                      <button onClick={() => setShowMoreTools(false)} className="p-1 hover:bg-gray-200 rounded">
-                        <X className="w-3 h-3" />
-                      </button>
-                    </div>
-                    <div className="max-h-80 overflow-y-auto">
-                      {moreTools.map((tool) => {
-                        const IconComponent = tool.icon
-                        return (
-                          <button
-                            key={tool.id}
-                            onClick={() => handleMoreToolClick(tool.id)}
-                            className="w-full text-left p-3 hover:bg-gray-50 flex items-center gap-3 group"
-                          >
-                            <IconComponent className="w-5 h-5 text-gray-500 group-hover:text-blue-600" />
-                            <div className="flex-1">
-                              <div className="text-sm font-medium text-gray-800">{tool.name}</div>
-                              <div className="text-xs text-gray-500">{tool.description}</div>
-                            </div>
-                            <div className="text-xs text-orange-500 bg-orange-50 px-2 py-1 rounded">开发中</div>
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </nav>
-          </aside>
-
-          {/* 主内容区域 */}
-          <main className="flex-1 flex flex-col items-center justify-center px-8 relative">
-            {/* 历史记录面板 */}
-            {showHistory && (
-              <div className="absolute top-4 right-4 w-full md:w-96 max-w-sm md:max-w-none bg-white rounded-lg shadow-xl border z-30 max-h-96 overflow-hidden">
-                <div className="p-4 border-b bg-gray-50 flex items-center justify-between">
-                  <h3 className="font-semibold text-gray-800 flex items-center gap-2">
-                    <History className="w-5 h-5" />
-                    搜索历史
-                  </h3>
-                  <button onClick={() => setShowHistory(false)} className="p-1 hover:bg-gray-200 rounded">
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-                <div className="max-h-80 overflow-y-auto">
-                  {searchHistory.length === 0 ? (
-                    <div className="p-8 text-center text-gray-500">
-                      <History className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                      <p>暂无搜索历史</p>
-                      <p className="text-sm mt-1">开始您的第一次搜索吧！</p>
-                    </div>
-                  ) : (
-                    <div className="p-2">
-                      {searchHistory.slice(0, 10).map((item) => (
-                        <button
-                          key={item.id}
-                          onClick={() => handleHistoryClick(item)}
-                          className="w-full text-left p-3 hover:bg-gray-50 rounded-lg group flex items-start gap-3"
-                        >
-                          <Clock className="w-4 h-4 text-gray-400 mt-1 flex-shrink-0" />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-gray-800 line-clamp-2">{item.question}</p>
-                            <p className="text-xs text-gray-500 mt-1">{formatTime(item.timestamp)}</p>
-                          </div>
-                          <button
-                            onClick={(e) => handleDeleteHistory(item.id, e)}
-                            className="opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-200 rounded transition-opacity"
-                          >
-                            <X className="w-3 h-3 text-gray-400" />
-                          </button>
-                        </button>
-                      ))}
-                      {searchHistory.length > 0 && (
-                        <div className="p-3 border-t">
-                          <button
-                            onClick={() => {
-                              try {
-                                HistoryManager.clearHistory()
-                                loadHistory()
-                              } catch (error) {
-                                console.error("清除历史记录失败:", error)
-                              }
-                            }}
-                            className="text-sm text-red-600 hover:text-red-700"
-                          >
-                            清除所有历史记录
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* 搜索表单 */}
-            <form onSubmit={handleSubmit} className="w-full max-w-4xl w-full px-4 md:px-0 relative">
-              <div className="relative">
-                <div className="relative">
-                  <textarea
-                    value={question}
-                    onChange={(e) => handleQuestionChange(e.target.value)}
-                    placeholder="请输入您的问题..."
-                    className="w-full min-h-[120px] md:min-h-[120px] p-4 md:p-6 pr-20 border-2 border-blue-500 rounded-2xl resize-none focus:outline-none focus:border-blue-600 text-gray-800 text-base md:text-lg leading-relaxed bg-white"
-                    disabled={isSubmitting}
-                  />
-
-                  {/* 输入框内的功能按钮 */}
-                  <div className="absolute bottom-4 right-4 flex items-center gap-2">
-                    {/* 语音输入按钮 */}
-                    <button
-                      type="button"
-                      onClick={isRecording ? stopRecording : startRecording}
-                      className={`p-2 rounded-lg transition-colors ${
-                        isRecording
-                          ? "bg-red-500 text-white animate-pulse"
-                          : "text-gray-500 hover:text-blue-600 hover:bg-blue-50"
-                      }`}
-                      title={isRecording ? "停止录音" : "语音输入"}
+                  <CardHeader className="text-center pb-2">
+                    <div
+                      className={`w-12 h-12 ${action.color} rounded-xl flex items-center justify-center mx-auto mb-3`}
                     >
-                      {isRecording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-                    </button>
-
-                    {/* 文件上传按钮 */}
-                    <div className="relative">
-                      <button
-                        type="button"
-                        onClick={() => setShowFileUpload(!showFileUpload)}
-                        className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        title="上传文件"
-                      >
-                        <Paperclip className="w-5 h-5" />
-                      </button>
-
-                      {/* 文件上传选项 */}
-                      {showFileUpload && (
-                        <div className="absolute bottom-full right-0 mb-2 bg-white border rounded-lg shadow-lg p-2 min-w-[120px]">
-                          <button
-                            type="button"
-                            onClick={() => fileInputRef.current?.click()}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded"
-                          >
-                            <Paperclip className="w-4 h-4" />
-                            上传文件
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => imageInputRef.current?.click()}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded"
-                          >
-                            <Camera className="w-4 h-4" />
-                            上传图片
-                          </button>
-                        </div>
-                      )}
+                      <IconComponent className="w-6 h-6 text-white" />
                     </div>
-
-                    {/* 发送按钮 */}
-                    <button
-                      type="submit"
-                      disabled={!question.trim() || isSubmitting}
-                      className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                      title="发送"
-                    >
-                      {isSubmitting ? (
-                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      ) : (
-                        <Send className="w-5 h-5" />
-                      )}
-                    </button>
-                  </div>
-                </div>
-
-                {/* 智能提示 - 当用户输入时显示匹配的历史记录 */}
-                {question.trim() && filteredHistory.length > 0 && !showHistory && (
-                  <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-lg shadow-lg border z-20 max-h-48 overflow-y-auto">
-                    <div className="p-2">
-                      <div className="text-xs text-gray-500 px-3 py-2">相关搜索历史</div>
-                      {filteredHistory.map((item) => (
-                        <button
-                          key={item.id}
-                          onClick={() => handleHistoryClick(item)}
-                          className="w-full text-left p-3 hover:bg-gray-50 rounded-lg flex items-center gap-3"
-                        >
-                          <Clock className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                          <span className="text-sm text-gray-700 truncate">{item.question}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </form>
-
-            {/* 隐藏的文件输入 */}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".pdf,.doc,.docx,.txt,.md"
-              onChange={handleFileUpload}
-              className="hidden"
-            />
-            <input ref={imageInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
-          </main>
+                    <CardTitle className="text-lg">{action.title}</CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-center pt-0">
+                    <CardDescription className="text-sm">{action.description}</CardDescription>
+                  </CardContent>
+                </Card>
+              )
+            })}
+          </div>
         </div>
-      </div>
 
-      {/* 点击外部关闭菜单 */}
-      {showFileUpload && <div className="fixed inset-0 z-10" onClick={() => setShowFileUpload(false)} />}
-      {showMoreTools && <div className="fixed inset-0 z-20" onClick={() => setShowMoreTools(false)} />}
+        {/* 搜索历史 */}
+        {searchHistory.length > 0 && (
+          <div className="mb-12">
+            <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">最近搜索</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {searchHistory.map((item) => (
+                <Card
+                  key={item.id}
+                  className="cursor-pointer hover:shadow-md transition-all duration-200 bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm"
+                  onClick={() => handleSearch(item.query, item.type)}
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex items-center space-x-2">
+                        {item.type === "voice" && <Mic className="w-4 h-4 text-green-500" />}
+                        {item.type === "image" && <ImageIcon className="w-4 h-4 text-blue-500" />}
+                        {item.type === "file" && <FileText className="w-4 h-4 text-purple-500" />}
+                        {item.type === "text" && <Search className="w-4 h-4 text-gray-500" />}
+                        <Badge variant="outline" className="text-xs">
+                          {item.type === "voice"
+                            ? "语音"
+                            : item.type === "image"
+                              ? "图片"
+                              : item.type === "file"
+                                ? "文件"
+                                : "文本"}
+                        </Badge>
+                      </div>
+                      <span className="text-xs text-gray-500">{item.timestamp.toLocaleDateString()}</span>
+                    </div>
+                    <p className="text-sm font-medium text-gray-900 dark:text-white mb-1 line-clamp-2">{item.query}</p>
+                    {item.results && <p className="text-xs text-gray-500">约 {item.results.toLocaleString()} 个结果</p>}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
 
-      {/* 自定义动画样式 */}
-      <style jsx>{`
-        @keyframes bounce-in {
-          0% {
-            transform: translate(-50%, -50%) scale(0.3);
-            opacity: 0;
-          }
-          50% {
-            transform: translate(-50%, -50%) scale(1.1);
-            opacity: 1;
-          }
-          70% {
-            transform: translate(-50%, -50%) scale(0.9);
-          }
-          100% {
-            transform: translate(-50%, -50%) scale(1);
-          }
-        }
+        {/* 统计信息 */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
+          <Card className="text-center bg-gradient-to-br from-blue-500 to-blue-600 text-white border-0">
+            <CardContent className="p-6">
+              <Search className="w-8 h-8 mx-auto mb-2" />
+              <div className="text-2xl font-bold">1.2M+</div>
+              <div className="text-sm opacity-90">搜索查询</div>
+            </CardContent>
+          </Card>
 
-        @keyframes bubble-in {
-          0% {
-            transform: scale(0) translateY(10px);
-            opacity: 0;
-          }
-          50% {
-            transform: scale(1.1) translateY(-5px);
-          }
-          100% {
-            transform: scale(1) translateY(0);
-            opacity: 1;
-          }
-        }
+          <Card className="text-center bg-gradient-to-br from-green-500 to-green-600 text-white border-0">
+            <CardContent className="p-6">
+              <Users className="w-8 h-8 mx-auto mb-2" />
+              <div className="text-2xl font-bold">50K+</div>
+              <div className="text-sm opacity-90">活跃用户</div>
+            </CardContent>
+          </Card>
 
-        .line-clamp-2 {
-          display: -webkit-box;
-          -webkit-line-clamp: 2;
-          -webkit-box-orient: vertical;
-          overflow: hidden;
-        }
-      `}</style>
+          <Card className="text-center bg-gradient-to-br from-purple-500 to-purple-600 text-white border-0">
+            <CardContent className="p-6">
+              <Brain className="w-8 h-8 mx-auto mb-2" />
+              <div className="text-2xl font-bold">99.5%</div>
+              <div className="text-sm opacity-90">准确率</div>
+            </CardContent>
+          </Card>
+
+          <Card className="text-center bg-gradient-to-br from-orange-500 to-orange-600 text-white border-0">
+            <CardContent className="p-6">
+              <Zap className="w-8 h-8 mx-auto mb-2" />
+              <div className="text-2xl font-bold">0.3s</div>
+              <div className="text-sm opacity-90">平均响应</div>
+            </CardContent>
+          </Card>
+        </div>
+      </main>
+
+      {/* 隐藏的视频元素用于摄像头 */}
+      <video ref={videoRef} className="hidden" autoPlay playsInline />
     </div>
   )
 }

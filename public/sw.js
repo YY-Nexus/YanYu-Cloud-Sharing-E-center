@@ -1,5 +1,14 @@
-const CACHE_NAME = "ai-search-app-v1"
-const STATIC_CACHE_URLS = ["/", "/offline", "/pwa-test", "/manifest.json", "/icon-192.png", "/icon-512.png"]
+// AI智能搜索平台 Service Worker
+const CACHE_NAME = "ai-search-app-v1.0.0"
+const STATIC_CACHE_URLS = [
+  "/",
+  "/offline",
+  "/pwa-test",
+  "/manifest.json",
+  "/icon-72.png",
+  "/icon-192.png",
+  "/icon-512.png",
+]
 
 // 安装事件 - 缓存静态资源
 self.addEventListener("install", (event) => {
@@ -77,7 +86,7 @@ self.addEventListener("fetch", (event) => {
               return cachedResponse
             }
 
-            // 返回离线页面或默认响应
+            // 返回离线数据
             if (url.pathname.includes("/api/test-offline")) {
               return new Response(
                 JSON.stringify({
@@ -159,7 +168,7 @@ self.addEventListener("push", (event) => {
   const options = {
     body: event.data ? event.data.text() : "您有新消息",
     icon: "/icon-192.png",
-    badge: "/badge-72.png",
+    badge: "/icon-72.png",
     vibrate: [200, 100, 200],
     data: {
       dateOfArrival: Date.now(),
@@ -211,9 +220,6 @@ self.addEventListener("message", (event) => {
 async function syncOfflineData() {
   try {
     console.log("Service Worker: 开始同步离线数据")
-
-    // 这里可以实现具体的数据同步逻辑
-    // 例如从 IndexedDB 获取待同步数据并发送到服务器
 
     const response = await fetch("/api/sync", {
       method: "GET",

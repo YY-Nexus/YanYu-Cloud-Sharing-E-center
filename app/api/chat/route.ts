@@ -1,4 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { generateText } from "ai"
+import { openai } from "@ai-sdk/openai"
 
 interface ChatMessage {
   role: "user" | "assistant" | "system"
@@ -9,7 +11,7 @@ interface ChatRequest {
   messages: ChatMessage[]
   model?: string
   temperature?: number
-  max_tokens?: number
+  maxTokens?: number
   stream?: boolean
 }
 
@@ -302,71 +304,74 @@ ${userQuestion}
 
 export async function POST(request: NextRequest) {
   try {
-    const body: ChatRequest = await request.json()
+    const body = await request.json()
+    const { messages, temperature = 0.7, maxTokens = 2000 } = body
 
-    // 验证请求数据
-    if (!body.messages || !Array.isArray(body.messages) || body.messages.length === 0) {
-      return NextResponse.json({ error: "消息数组不能为空" }, { status: 400 })
+    if (!messages || !Array.isArray(messages)) {
+      return NextResponse.json({ error: "消息格式不正确" }, { status: 400 })
     }
 
     // 验证消息格式
-    for (const message of body.messages) {
+    for (const message of messages) {
       if (!message.role || !message.content) {
-        return NextResponse.json({ error: "消息格式不正确" }, { status: 400 })
+        return NextResponse.json({ error: "消息必须包含role和content字段" }, { status: 400 })
       }
     }
 
     const startTime = Date.now()
 
-    // 生成AI回答
-    const aiResponse = await generateAIResponse(body.messages, {
-      model: body.model,
-      temperature: body.temperature,
-      max_tokens: body.max_tokens,
+    // 调用AI生成回复
+    const { text, usage } = await generateText({
+      model: openai("gpt-4o"),
+      messages: messages.map((msg: any) => ({
+        role: msg.role,
+        content: msg.content,
+      })),
+      temperature,
+      maxTokens,
     })
 
     const responseTime = Date.now() - startTime
-    const promptTokens = body.messages.reduce((sum, msg) => sum + Math.ceil(msg.content.length / 4), 0)
-    const completionTokens = Math.ceil(aiResponse.length / 4)
 
-    // 构造响应
-    const response = {
-      id: `chatcmpl-${Date.now()}`,
-      object: "chat.completion",
-      created: Math.floor(Date.now() / 1000),
-      model: body.model || "gpt-3.5-turbo",
+    return NextResponse.json({
+      id: `chat-${Date.now()}`,
       choices: [
         {
-          index: 0,
           message: {
-            role: "assistant" as const,
-            content: aiResponse,
+            role: "assistant",
+            content: text,
           },
           finish_reason: "stop",
         },
       ],
       usage: {
-        prompt_tokens: promptTokens,
-        completion_tokens: completionTokens,
-        total_tokens: promptTokens + completionTokens,
+        prompt_tokens: usage?.promptTokens || 0,
+        completion_tokens: usage?.completionTokens || 0,
+        total_tokens: usage?.totalTokens || 0,
       },
-      response_time: responseTime,
-    }
-
-    return NextResponse.json(response)
+      metadata: {
+        responseTime,
+        model: "gpt-4o",
+        timestamp: Date.now(),
+      },
+    })
   } catch (error) {
-    console.error("Chat API错误:", error)
-    return NextResponse.json({ error: "服务器内部错误" }, { status: 500 })
+    console.error("聊天API错误:", error)
+
+    return NextResponse.json(
+      {
+        error: "AI服务暂时不可用，请稍后重试",
+        details: error instanceof Error ? error.message : "未知错误",
+      },
+      { status: 500 },
+    )
   }
 }
 
 export async function GET() {
   return NextResponse.json({
-    message: "Chat API正常运行",
+    status: "ok",
+    message: "聊天API正常运行",
     timestamp: new Date().toISOString(),
-    endpoints: {
-      chat: "POST /api/chat",
-      stream: "POST /api/chat/stream",
-    },
   })
 }

@@ -30,9 +30,11 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET() {
+  // 模拟数据同步
   return NextResponse.json({
-    status: "online",
-    message: "同步服务正常运行",
+    success: true,
+    message: "数据同步成功",
     timestamp: new Date().toISOString(),
+    synced_items: 0,
   })
 }
