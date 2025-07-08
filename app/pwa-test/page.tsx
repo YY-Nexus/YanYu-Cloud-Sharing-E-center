@@ -17,11 +17,200 @@ import {
   AlertCircle,
   Monitor,
 } from "lucide-react"
-import { PWAManager, usePWA, PWAInstallButton, NetworkStatus } from "@/lib/pwa-manager"
+
+interface NetworkInfo {
+  type: string
+  effectiveType: string
+  downlink: number
+  rtt: number
+}
+
+interface PWAState {
+  isInstallable: boolean
+  isInstalled: boolean
+  isStandalone: boolean
+  isOnline: boolean
+  updateAvailable: boolean
+  networkInfo: NetworkInfo | null
+}
+
+// PWA管理器类
+class PWAManager {
+  static async requestNotificationPermission(): Promise<boolean> {
+    if (!("Notification" in window)) {
+      return false
+    }
+
+    const permission = await Notification.requestPermission()
+    return permission === "granted"
+  }
+
+  static async showNotification(title: string, options: NotificationOptions = {}) {
+    if (!("Notification" in window) || Notification.permission !== "granted") {
+      return
+    }
+
+    return new Notification(title, options)
+  }
+}
+
+// 网络状态组件
+function NetworkStatus() {
+  const [isOnline, setIsOnline] = useState(true)
+
+  useEffect(() => {
+    setIsOnline(navigator.onLine)
+
+    const handleOnline = () => setIsOnline(true)
+    const handleOffline = () => setIsOnline(false)
+
+    window.addEventListener("online", handleOnline)
+    window.addEventListener("offline", handleOffline)
+
+    return () => {
+      window.removeEventListener("online", handleOnline)
+      window.removeEventListener("offline", handleOffline)
+    }
+  }, [])
+
+  if (isOnline) return null
+
+  return (
+    <div className="fixed top-0 left-0 right-0 bg-red-600 text-white text-center py-2 z-50">
+      <WifiOff className="inline h-4 w-4 mr-2" />
+      您当前处于离线状态
+    </div>
+  )
+}
+
+// PWA安装按钮组件
+function PWAInstallButton() {
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null)
+  const [isInstallable, setIsInstallable] = useState(false)
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault()
+      setDeferredPrompt(e)
+      setIsInstallable(true)
+    }
+
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt)
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt)
+    }
+  }, [])
+
+  const handleInstall = async () => {
+    if (!deferredPrompt) return
+
+    deferredPrompt.prompt()
+    const { outcome } = await deferredPrompt.userChoice
+
+    if (outcome === "accepted") {
+      setIsInstallable(false)
+      setDeferredPrompt(null)
+    }
+  }
+
+  if (!isInstallable) return null
+
+  return (
+    <div className="fixed bottom-4 right-4 z-50">
+      <Button onClick={handleInstall} className="shadow-lg">
+        <Download className="h-4 w-4 mr-2" />
+        安装应用
+      </Button>
+    </div>
+  )
+}
+
+// 自定义PWA Hook
+function usePWA(): PWAState {
+  const [state, setState] = useState<PWAState>({
+    isInstallable: false,
+    isInstalled: false,
+    isStandalone: false,
+    isOnline: true,
+    updateAvailable: false,
+    networkInfo: null,
+  })
+
+  useEffect(() => {
+    // 检查是否为独立应用模式
+    const isStandalone =
+      window.matchMedia("(display-mode: standalone)").matches || (window.navigator as any).standalone === true
+
+    // 检查网络状态
+    const isOnline = navigator.onLine
+
+    // 获取网络信息
+    let networkInfo: NetworkInfo | null = null
+    if ("connection" in navigator) {
+      const connection = (navigator as any).connection
+      networkInfo = {
+        type: connection.type || "unknown",
+        effectiveType: connection.effectiveType || "unknown",
+        downlink: connection.downlink || 0,
+        rtt: connection.rtt || 0,
+      }
+    }
+
+    setState((prev) => ({
+      ...prev,
+      isStandalone,
+      isOnline,
+      networkInfo,
+    }))
+
+    // 监听网络状态变化
+    const handleOnline = () => setState((prev) => ({ ...prev, isOnline: true }))
+    const handleOffline = () => setState((prev) => ({ ...prev, isOnline: false }))
+
+    window.addEventListener("online", handleOnline)
+    window.addEventListener("offline", handleOffline)
+
+    // 监听安装提示
+    const handleBeforeInstallPrompt = () => {
+      setState((prev) => ({ ...prev, isInstallable: true }))
+    }
+
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt)
+
+    return () => {
+      window.removeEventListener("online", handleOnline)
+      window.removeEventListener("offline", handleOffline)
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt)
+    }
+  }, [])
+
+  const installApp = async (): Promise<boolean> => {
+    // 这里应该触发安装提示
+    return false
+  }
+
+  const updateApp = async (): Promise<void> => {
+    if ("serviceWorker" in navigator) {
+      const registration = await navigator.serviceWorker.getRegistration()
+      if (registration) {
+        registration.update()
+      }
+    }
+  }
+
+  return {
+    ...state,
+    installApp,
+    updateApp,
+  } as PWAState & {
+    installApp: () => Promise<boolean>
+    updateApp: () => Promise<void>
+  }
+}
 
 export default function PWATestPage() {
-  const { isInstallable, isInstalled, isStandalone, isOnline, updateAvailable, installApp, updateApp, networkInfo } =
-    usePWA()
+  const { isInstallable, isInstalled, isStandalone, isOnline, updateAvailable, networkInfo } = usePWA()
 
   const [notifications, setNotifications] = useState<NotificationPermission>("default")
   const [testResults, setTestResults] = useState<{
@@ -87,7 +276,6 @@ export default function PWATestPage() {
         await PWAManager.showNotification("测试通知", {
           body: "通知功能已成功启用！",
           icon: "/icon-192.png",
-          badge: "/badge-72.png",
         })
       }
     } catch (error) {
@@ -122,12 +310,7 @@ export default function PWATestPage() {
 
   const handleInstallApp = async () => {
     try {
-      const success = await installApp()
-      if (success) {
-        alert("应用安装成功！")
-      } else {
-        alert("应用安装失败或被用户取消")
-      }
+      alert("请在浏览器地址栏或菜单中查找安装或添加到主屏幕选项")
     } catch (error) {
       alert("安装过程中出现错误: " + error)
     }
@@ -135,8 +318,13 @@ export default function PWATestPage() {
 
   const handleUpdateApp = async () => {
     try {
-      await updateApp()
-      alert("应用更新成功！")
+      if ("serviceWorker" in navigator) {
+        const registration = await navigator.serviceWorker.getRegistration()
+        if (registration) {
+          await registration.update()
+          alert("应用更新成功！")
+        }
+      }
     } catch (error) {
       alert("更新失败: " + error)
     }
@@ -249,7 +437,7 @@ export default function PWATestPage() {
               <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                 <span className="text-sm font-medium">用户代理</span>
                 <Badge variant="outline" className="text-xs">
-                  {navigator.userAgent.includes("Mobile") ? "移动设备" : "桌面设备"}
+                  {typeof window !== "undefined" && navigator.userAgent.includes("Mobile") ? "移动设备" : "桌面设备"}
                 </Badge>
               </div>
             </div>
@@ -325,7 +513,7 @@ export default function PWATestPage() {
                   <h4 className="font-medium">推送通知</h4>
                   <p className="text-sm text-gray-600">系统通知支持</p>
                 </div>
-                {getFeatureStatus("Notification" in window)}
+                {getFeatureStatus(typeof window !== "undefined" && "Notification" in window)}
               </div>
             </div>
           </CardContent>
@@ -473,7 +661,7 @@ export default function PWATestPage() {
             <Alert>
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                要完整测试离线功能，请在浏览器开发者工具中启用"离线"模式，然后刷新页面查看缓存内容是否正常加载。
+                要完整测试离线功能，请在浏览器开发者工具中启用离线模式，然后刷新页面查看缓存内容是否正常加载。
               </AlertDescription>
             </Alert>
           </CardContent>
@@ -492,24 +680,24 @@ export default function PWATestPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="p-3 border rounded-lg">
                 <h4 className="font-medium mb-2">触摸支持</h4>
-                <Badge variant={"ontouchstart" in window ? "default" : "secondary"}>
-                  {"ontouchstart" in window ? "支持" : "不支持"}
+                <Badge variant={typeof window !== "undefined" && "ontouchstart" in window ? "default" : "secondary"}>
+                  {typeof window !== "undefined" && "ontouchstart" in window ? "支持" : "不支持"}
                 </Badge>
               </div>
 
               <div className="p-3 border rounded-lg">
                 <h4 className="font-medium mb-2">设备方向</h4>
-                <Badge variant={"orientation" in screen ? "default" : "secondary"}>
-                  {"orientation" in screen ? "支持" : "不支持"}
+                <Badge variant={typeof window !== "undefined" && "orientation" in screen ? "default" : "secondary"}>
+                  {typeof window !== "undefined" && "orientation" in screen ? "支持" : "不支持"}
                 </Badge>
               </div>
 
               <div className="p-3 border rounded-lg">
                 <h4 className="font-medium mb-2">振动API</h4>
-                <Badge variant={"vibrate" in navigator ? "default" : "secondary"}>
-                  {"vibrate" in navigator ? "支持" : "不支持"}
+                <Badge variant={typeof window !== "undefined" && "vibrate" in navigator ? "default" : "secondary"}>
+                  {typeof window !== "undefined" && "vibrate" in navigator ? "支持" : "不支持"}
                 </Badge>
-                {"vibrate" in navigator && (
+                {typeof window !== "undefined" && "vibrate" in navigator && (
                   <Button
                     size="sm"
                     variant="outline"
@@ -523,8 +711,8 @@ export default function PWATestPage() {
 
               <div className="p-3 border rounded-lg">
                 <h4 className="font-medium mb-2">电池API</h4>
-                <Badge variant={"getBattery" in navigator ? "default" : "secondary"}>
-                  {"getBattery" in navigator ? "支持" : "不支持"}
+                <Badge variant={typeof window !== "undefined" && "getBattery" in navigator ? "default" : "secondary"}>
+                  {typeof window !== "undefined" && "getBattery" in navigator ? "支持" : "不支持"}
                 </Badge>
               </div>
             </div>
