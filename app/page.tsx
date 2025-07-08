@@ -618,7 +618,7 @@ export default function HomePage() {
                     value={question}
                     onChange={(e) => handleQuestionChange(e.target.value)}
                     placeholder="请输入您的问题..."
-                    className="w-full min-h-[120px] md:min-h-[120px] p-4 md:p-6 pr-20 border-2 border-blue-500 rounded-2xl resize-none focus:outline-none focus:border-blue-600 text-gray-800 text-base md:text-lg leading-relaxed"
+                    className="w-full min-h-[120px] md:min-h-[120px] p-4 md:p-6 pr-20 border-2 border-blue-500 rounded-2xl resize-none focus:outline-none focus:border-blue-600 text-gray-800 text-base md:text-lg leading-relaxed bg-white"
                     disabled={isSubmitting}
                   />
 
