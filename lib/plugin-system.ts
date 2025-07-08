@@ -1,26 +1,52 @@
 "use client"
 
-import React from "react"
+import type React from "react"
 
+import { useState, useEffect } from "react"
+
+// 插件系统架构
 export interface Plugin {
   id: string
   name: string
   version: string
   description: string
   author: string
-  permissions: string[]
-  enabled: boolean
-  config?: Record<string, any>
-  hooks?: PluginHooks
+  category: PluginCategory
+  permissions: PluginPermission[]
+  dependencies: string[]
+  isEnabled: boolean
+  config: Record<string, any>
+  hooks: PluginHooks
   components?: PluginComponents
-  apis?: PluginAPI[]
+  api?: PluginAPI
 }
 
+export type PluginCategory =
+  | "ai-enhancement"
+  | "data-processing"
+  | "ui-extension"
+  | "integration"
+  | "analytics"
+  | "security"
+
+export type PluginPermission =
+  | "read-user-data"
+  | "write-user-data"
+  | "access-ai-api"
+  | "modify-ui"
+  | "network-access"
+  | "file-system"
+
 export interface PluginHooks {
-  onSearchQuery?: (query: string) => Promise<string>
-  onAIRequest?: (request: any) => Promise<any>
+  onInstall?: () => Promise<void>
+  onUninstall?: () => Promise<void>
+  onEnable?: () => Promise<void>
+  onDisable?: () => Promise<void>
   onUserLogin?: (user: any) => Promise<void>
-  onResultGenerated?: (result: any) => Promise<void>
+  onSearchQuery?: (query: string) => Promise<string>
+  onSearchResult?: (result: any) => Promise<any>
+  beforeAIRequest?: (request: any) => Promise<any>
+  afterAIResponse?: (response: any) => Promise<any>
 }
 
 export interface PluginComponents {
@@ -31,9 +57,8 @@ export interface PluginComponents {
 }
 
 export interface PluginAPI {
-  path: string
-  method: "GET" | "POST" | "PUT" | "DELETE"
-  handler: (req: any) => Promise<any>
+  endpoints: Record<string, (req: any) => Promise<any>>
+  middleware?: Array<(req: any, res: any, next: () => void) => void>
 }
 
 export interface PluginManifest {
@@ -42,131 +67,148 @@ export interface PluginManifest {
   version: string
   description: string
   author: string
-  permissions: string[]
-  main: string
-  dependencies?: string[]
-  minAppVersion?: string
+  homepage?: string
+  repository?: string
+  license: string
+  category: PluginCategory
+  permissions: PluginPermission[]
+  dependencies: string[]
+  minAppVersion: string
+  maxAppVersion?: string
+  entry: string
+  config?: {
+    schema: Record<string, any>
+    defaults: Record<string, any>
+  }
 }
 
-export class PluginSystem {
+export class PluginManager {
   private static plugins: Map<string, Plugin> = new Map()
-  private static hooks: Map<string, Function[]> = new Map()
-  private static components: Map<string, React.ComponentType<any>[]> = new Map()
-  private static apis: Map<string, PluginAPI> = new Map()
+  private static enabledPlugins: Set<string> = new Set()
+  private static pluginConfigs: Map<string, Record<string, any>> = new Map()
 
   // 注册插件
-  static async registerPlugin(manifest: PluginManifest, pluginCode: string): Promise<void> {
+  static registerPlugin(plugin: Plugin): boolean {
     try {
-      // 验证权限
-      if (!this.validatePermissions(manifest.permissions)) {
-        throw new Error("插件权限验证失败")
+      // 验证插件
+      if (!this.validatePlugin(plugin)) {
+        throw new Error(`插件验证失败: ${plugin.id}`)
       }
 
-      // 执行插件代码
-      const pluginModule = await this.executePluginCode(pluginCode)
-
-      const plugin: Plugin = {
-        id: manifest.id,
-        name: manifest.name,
-        version: manifest.version,
-        description: manifest.description,
-        author: manifest.author,
-        permissions: manifest.permissions,
-        enabled: false,
-        hooks: pluginModule.hooks,
-        components: pluginModule.components,
-        apis: pluginModule.apis,
+      // 检查依赖
+      if (!this.checkDependencies(plugin)) {
+        throw new Error(`插件依赖不满足: ${plugin.id}`)
       }
 
-      this.plugins.set(manifest.id, plugin)
+      // 注册插件
+      this.plugins.set(plugin.id, plugin)
 
-      // 注册钩子
-      if (plugin.hooks) {
-        this.registerHooks(plugin.id, plugin.hooks)
+      // 执行安装钩子
+      if (plugin.hooks.onInstall) {
+        plugin.hooks.onInstall()
       }
 
-      // 注册组件
-      if (plugin.components) {
-        this.registerComponents(plugin.id, plugin.components)
-      }
-
-      // 注册API
-      if (plugin.apis) {
-        this.registerAPIs(plugin.id, plugin.apis)
-      }
-
-      console.log(`插件 ${manifest.name} 注册成功`)
+      console.log(`插件已注册: ${plugin.name} v${plugin.version}`)
+      return true
     } catch (error) {
-      console.error(`插件注册失败:`, error)
-      throw error
+      console.error("插件注册失败:", error)
+      return false
     }
   }
 
   // 启用插件
-  static enablePlugin(pluginId: string): void {
-    const plugin = this.plugins.get(pluginId)
-    if (!plugin) {
-      throw new Error("插件不存在")
-    }
+  static async enablePlugin(pluginId: string): Promise<boolean> {
+    try {
+      const plugin = this.plugins.get(pluginId)
+      if (!plugin) {
+        throw new Error(`插件不存在: ${pluginId}`)
+      }
 
-    plugin.enabled = true
-    this.savePluginState()
-    console.log(`插件 ${plugin.name} 已启用`)
+      // 检查权限
+      if (!this.checkPermissions(plugin)) {
+        throw new Error(`插件权限不足: ${pluginId}`)
+      }
+
+      // 启用插件
+      plugin.isEnabled = true
+      this.enabledPlugins.add(pluginId)
+
+      // 执行启用钩子
+      if (plugin.hooks.onEnable) {
+        await plugin.hooks.onEnable()
+      }
+
+      // 注册API端点
+      if (plugin.api) {
+        this.registerPluginAPI(plugin)
+      }
+
+      console.log(`插件已启用: ${plugin.name}`)
+      return true
+    } catch (error) {
+      console.error("插件启用失败:", error)
+      return false
+    }
   }
 
   // 禁用插件
-  static disablePlugin(pluginId: string): void {
-    const plugin = this.plugins.get(pluginId)
-    if (!plugin) {
-      throw new Error("插件不存在")
-    }
+  static async disablePlugin(pluginId: string): Promise<boolean> {
+    try {
+      const plugin = this.plugins.get(pluginId)
+      if (!plugin) {
+        throw new Error(`插件不存在: ${pluginId}`)
+      }
 
-    plugin.enabled = false
-    this.savePluginState()
-    console.log(`插件 ${plugin.name} 已禁用`)
+      // 禁用插件
+      plugin.isEnabled = false
+      this.enabledPlugins.delete(pluginId)
+
+      // 执行禁用钩子
+      if (plugin.hooks.onDisable) {
+        await plugin.hooks.onDisable()
+      }
+
+      // 注销API端点
+      if (plugin.api) {
+        this.unregisterPluginAPI(plugin)
+      }
+
+      console.log(`插件已禁用: ${plugin.name}`)
+      return true
+    } catch (error) {
+      console.error("插件禁用失败:", error)
+      return false
+    }
   }
 
   // 卸载插件
-  static uninstallPlugin(pluginId: string): void {
-    const plugin = this.plugins.get(pluginId)
-    if (!plugin) {
-      throw new Error("插件不存在")
-    }
-
-    // 清理钩子
-    this.unregisterHooks(pluginId)
-
-    // 清理组件
-    this.unregisterComponents(pluginId)
-
-    // 清理API
-    this.unregisterAPIs(pluginId)
-
-    this.plugins.delete(pluginId)
-    this.savePluginState()
-    console.log(`插件 ${plugin.name} 已卸载`)
-  }
-
-  // 执行钩子
-  static async executeHook(hookName: string, ...args: any[]): Promise<any[]> {
-    const hookFunctions = this.hooks.get(hookName) || []
-    const results = []
-
-    for (const hookFn of hookFunctions) {
-      try {
-        const result = await hookFn(...args)
-        results.push(result)
-      } catch (error) {
-        console.error(`钩子执行失败 ${hookName}:`, error)
+  static async uninstallPlugin(pluginId: string): Promise<boolean> {
+    try {
+      const plugin = this.plugins.get(pluginId)
+      if (!plugin) {
+        throw new Error(`插件不存在: ${pluginId}`)
       }
+
+      // 先禁用插件
+      if (plugin.isEnabled) {
+        await this.disablePlugin(pluginId)
+      }
+
+      // 执行卸载钩子
+      if (plugin.hooks.onUninstall) {
+        await plugin.hooks.onUninstall()
+      }
+
+      // 移除插件
+      this.plugins.delete(pluginId)
+      this.pluginConfigs.delete(pluginId)
+
+      console.log(`插件已卸载: ${plugin.name}`)
+      return true
+    } catch (error) {
+      console.error("插件卸载失败:", error)
+      return false
     }
-
-    return results
-  }
-
-  // 获取插件组件
-  static getPluginComponents(type: string): React.ComponentType<any>[] {
-    return this.components.get(type) || []
   }
 
   // 获取所有插件
@@ -174,214 +216,375 @@ export class PluginSystem {
     return Array.from(this.plugins.values())
   }
 
-  // 获取启用的插件
+  // 获取已启用的插件
   static getEnabledPlugins(): Plugin[] {
-    return Array.from(this.plugins.values()).filter((p) => p.enabled)
+    return Array.from(this.plugins.values()).filter((p) => p.isEnabled)
   }
 
-  // 验证权限
-  private static validatePermissions(permissions: string[]): boolean {
-    const allowedPermissions = [
-      "search.query",
-      "ai.request",
-      "user.profile",
-      "storage.read",
-      "storage.write",
-      "network.request",
-      "ui.sidebar",
-      "ui.toolbar",
-      "api.register",
-    ]
-
-    return permissions.every((permission) => allowedPermissions.includes(permission))
+  // 按分类获取插件
+  static getPluginsByCategory(category: PluginCategory): Plugin[] {
+    return Array.from(this.plugins.values()).filter((p) => p.category === category)
   }
 
-  // 执行插件代码
-  private static async executePluginCode(code: string): Promise<any> {
-    // 创建安全的执行环境
-    const sandbox = {
-      console: {
-        log: (...args: any[]) => console.log("[Plugin]", ...args),
-        error: (...args: any[]) => console.error("[Plugin]", ...args),
-      },
-      setTimeout,
-      clearTimeout,
-      setInterval,
-      clearInterval,
-      fetch: (url: string, options?: RequestInit) => {
-        // 限制网络请求
-        if (!url.startsWith("https://api.")) {
-          throw new Error("不允许的网络请求")
+  // 执行插件钩子
+  static async executeHook<T>(hookName: keyof PluginHooks, ...args: any[]): Promise<T[]> {
+    const results: T[] = []
+
+    for (const plugin of this.getEnabledPlugins()) {
+      const hook = plugin.hooks[hookName]
+      if (hook && typeof hook === "function") {
+        try {
+          const result = await hook(...args)
+          if (result !== undefined) {
+            results.push(result)
+          }
+        } catch (error) {
+          console.error(`插件钩子执行失败 ${plugin.id}.${hookName}:`, error)
         }
-        return fetch(url, options)
-      },
+      }
     }
 
-    // 使用Function构造器执行代码
-    const func = new Function(
-      "sandbox",
-      `
-      with (sandbox) {
-        ${code}
-        return typeof module !== 'undefined' ? module.exports : {};
+    return results
+  }
+
+  // 获取插件组件
+  static getPluginComponents(type: keyof PluginComponents): React.ComponentType<any>[] {
+    const components: React.ComponentType<any>[] = []
+
+    for (const plugin of this.getEnabledPlugins()) {
+      const component = plugin.components?.[type]
+      if (component) {
+        components.push(component)
       }
-    `,
-    )
+    }
 
-    return func(sandbox)
+    return components
   }
 
-  // 注册钩子
-  private static registerHooks(pluginId: string, hooks: PluginHooks): void {
-    Object.entries(hooks).forEach(([hookName, hookFn]) => {
-      if (!this.hooks.has(hookName)) {
-        this.hooks.set(hookName, [])
+  // 配置插件
+  static configurePlugin(pluginId: string, config: Record<string, any>): boolean {
+    try {
+      const plugin = this.plugins.get(pluginId)
+      if (!plugin) {
+        throw new Error(`插件不存在: ${pluginId}`)
       }
-      this.hooks.get(hookName)!.push(hookFn)
-    })
-  }
 
-  // 注册组件
-  private static registerComponents(pluginId: string, components: PluginComponents): void {
-    Object.entries(components).forEach(([type, component]) => {
-      if (!this.components.has(type)) {
-        this.components.set(type, [])
+      // 验证配置
+      if (!this.validateConfig(plugin, config)) {
+        throw new Error(`配置验证失败: ${pluginId}`)
       }
-      this.components.get(type)!.push(component)
-    })
-  }
 
-  // 注册API
-  private static registerAPIs(pluginId: string, apis: PluginAPI[]): void {
-    apis.forEach((api) => {
-      const key = `${api.method}:${api.path}`
-      this.apis.set(key, api)
-    })
-  }
+      // 保存配置
+      plugin.config = { ...plugin.config, ...config }
+      this.pluginConfigs.set(pluginId, plugin.config)
 
-  // 清理钩子
-  private static unregisterHooks(pluginId: string): void {
-    // 实现钩子清理逻辑
-  }
-
-  // 清理组件
-  private static unregisterComponents(pluginId: string): void {
-    // 实现组件清理逻辑
-  }
-
-  // 清理API
-  private static unregisterAPIs(pluginId: string): void {
-    // 实现API清理逻辑
-  }
-
-  // 保存插件状态
-  private static savePluginState(): void {
-    if (typeof window !== "undefined") {
-      const pluginStates = Array.from(this.plugins.entries()).map(([id, plugin]) => ({
-        id,
-        enabled: plugin.enabled,
-        config: plugin.config,
-      }))
-      localStorage.setItem("plugin-states", JSON.stringify(pluginStates))
+      return true
+    } catch (error) {
+      console.error("插件配置失败:", error)
+      return false
     }
   }
 
-  // 加载插件状态
-  static loadPluginStates(): void {
-    if (typeof window !== "undefined") {
-      try {
-        const stored = localStorage.getItem("plugin-states")
-        if (stored) {
-          const states = JSON.parse(stored)
-          states.forEach((state: any) => {
-            const plugin = this.plugins.get(state.id)
-            if (plugin) {
-              plugin.enabled = state.enabled
-              plugin.config = state.config
-            }
-          })
-        }
-      } catch (error) {
-        console.error("加载插件状态失败:", error)
+  // 获取插件配置
+  static getPluginConfig(pluginId: string): Record<string, any> | null {
+    return this.pluginConfigs.get(pluginId) || null
+  }
+
+  // 私有方法
+  private static validatePlugin(plugin: Plugin): boolean {
+    // 基本字段验证
+    if (!plugin.id || !plugin.name || !plugin.version) {
+      return false
+    }
+
+    // ID格式验证
+    if (!/^[a-z0-9-_]+$/.test(plugin.id)) {
+      return false
+    }
+
+    // 版本格式验证
+    if (!/^\d+\.\d+\.\d+$/.test(plugin.version)) {
+      return false
+    }
+
+    return true
+  }
+
+  private static checkDependencies(plugin: Plugin): boolean {
+    for (const dep of plugin.dependencies) {
+      if (!this.plugins.has(dep)) {
+        console.warn(`缺少依赖插件: ${dep}`)
+        return false
       }
     }
+    return true
+  }
+
+  private static checkPermissions(plugin: Plugin): boolean {
+    // 这里应该根据用户角色检查权限
+    // 简化实现，实际应该更严格
+    return true
+  }
+
+  private static registerPluginAPI(plugin: Plugin): void {
+    if (!plugin.api?.endpoints) return
+
+    // 注册API端点到路由系统
+    for (const [path, handler] of Object.entries(plugin.api.endpoints)) {
+      console.log(`注册插件API: /api/plugins/${plugin.id}${path}`)
+      // 实际实现中需要注册到Express或Next.js路由
+    }
+  }
+
+  private static unregisterPluginAPI(plugin: Plugin): void {
+    if (!plugin.api?.endpoints) return
+
+    // 注销API端点
+    for (const path of Object.keys(plugin.api.endpoints)) {
+      console.log(`注销插件API: /api/plugins/${plugin.id}${path}`)
+    }
+  }
+
+  private static validateConfig(plugin: Plugin, config: Record<string, any>): boolean {
+    // 简化的配置验证
+    // 实际应该使用JSON Schema或类似工具
+    return true
   }
 }
 
-// 插件管理器组件
-export const PluginManager: React.FC = () => {
-  const [plugins, setPlugins] = React.useState<Plugin[]>([])
-  const [loading, setLoading] = React.useState(false)
+// 插件管理界面组件
+export function PluginManagerUI() {
+  const [plugins, setPlugins] = useState<Plugin[]>([])
+  const [loading, setLoading] = useState(true)
+  const [selectedPlugin, setSelectedPlugin] = useState<Plugin | null>(null)
+  const [showConfigModal, setShowConfigModal] = useState(false)
 
-  React.useEffect(() => {
+  useEffect(() => {
+    // 加载插件列表
     loadPlugins()
   }, [])
 
   const loadPlugins = () => {
-    setPlugins(PluginSystem.getAllPlugins())
-  }
-
-  const togglePlugin = (pluginId: string, enabled: boolean) => {
+    setLoading(true)
     try {
-      if (enabled) {
-        PluginSystem.enablePlugin(pluginId)
-      } else {
-        PluginSystem.disablePlugin(pluginId)
-      }
-      loadPlugins()
+      const allPlugins = PluginManager.getAllPlugins()
+      setPlugins(allPlugins)
     } catch (error) {
-      console.error("切换插件状态失败:", error)
+      console.error("加载插件失败:", error)
+    } finally {
+      setLoading(false)
     }
   }
 
-  const uninstallPlugin = (pluginId: string) => {
+  const handleEnablePlugin = async (pluginId: string) => {
     try {
-      PluginSystem.uninstallPlugin(pluginId)
+      await PluginManager.enablePlugin(pluginId)
+      loadPlugins()
+    } catch (error) {
+      console.error("启用插件失败:", error)
+      alert("启用插件失败: " + (error instanceof Error ? error.message : String(error)))
+    }
+  }
+
+  const handleDisablePlugin = async (pluginId: string) => {
+    try {
+      await PluginManager.disablePlugin(pluginId)
+      loadPlugins()
+    } catch (error) {
+      console.error("禁用插件失败:", error)
+      alert("禁用插件失败: " + (error instanceof Error ? error.message : String(error)))
+    }
+  }
+
+  const handleUninstallPlugin = async (pluginId: string) => {
+    if (!confirm("确定要卸载此插件吗？此操作不可撤销。")) {
+      return
+    }
+
+    try {
+      await PluginManager.uninstallPlugin(pluginId)
       loadPlugins()
     } catch (error) {
       console.error("卸载插件失败:", error)
+      alert("卸载插件失败: " + (error instanceof Error ? error.message : String(error)))
     }
+  }
+
+  const handleConfigurePlugin = (plugin: Plugin) => {
+    setSelectedPlugin(plugin)
+    setShowConfigModal(true)
+  }
+
+  const handleSaveConfig = (config: Record<string, any>) => {
+    if (!selectedPlugin) return
+
+    try {
+      PluginManager.configurePlugin(selectedPlugin.id, config)
+      setShowConfigModal(false)
+      loadPlugins()
+    } catch (error) {
+      console.error("保存配置失败:", error)
+      alert("保存配置失败: " + (error instanceof Error ? error.message : String(error)))
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    )
   }
 
   return (
     <div className="plugin-manager p-6">
       <h2 className="text-2xl font-bold mb-6">插件管理</h2>
 
-      <div className="grid gap-4">
-        {plugins.map((plugin) => (
-          <div key={plugin.id} className="border rounded-lg p-4">
-            <div className="flex justify-between items-start mb-2">
-              <div>
-                <h3 className="font-semibold">{plugin.name}</h3>
-                <p className="text-sm text-gray-600">{plugin.description}</p>
-                <p className="text-xs text-gray-500">
-                  版本: {plugin.version} | 作者: {plugin.author}
-                </p>
+      {plugins.length === 0 ? (
+        <div className="text-center py-8 bg-gray-50 rounded-lg">
+          <p className="text-gray-500">暂无已安装的插件</p>
+          <button className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">浏览插件市场</button>
+        </div>
+      ) : (
+        <div className="grid gap-4">
+          {plugins.map((plugin) => (
+            <div key={plugin.id} className="border rounded-lg p-4 bg-white shadow-sm">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h3 className="font-semibold text-lg">{plugin.name}</h3>
+                  <p className="text-gray-600 mt-1">{plugin.description}</p>
+                  <div className="flex items-center mt-2 text-sm text-gray-500">
+                    <span className="mr-3">版本: {plugin.version}</span>
+                    <span>作者: {plugin.author}</span>
+                  </div>
+                  <div className="mt-2">
+                    <span className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
+                      {plugin.category}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-2">
+                  {plugin.isEnabled ? (
+                    <button
+                      onClick={() => handleDisablePlugin(plugin.id)}
+                      className="px-3 py-1 bg-gray-200 text-gray-800 rounded text-sm hover:bg-gray-300"
+                    >
+                      禁用
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleEnablePlugin(plugin.id)}
+                      className="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700"
+                    >
+                      启用
+                    </button>
+                  )}
+                  <button
+                    onClick={() => handleConfigurePlugin(plugin)}
+                    className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
+                  >
+                    配置
+                  </button>
+                  <button
+                    onClick={() => handleUninstallPlugin(plugin.id)}
+                    className="px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700"
+                  >
+                    卸载
+                  </button>
+                </div>
               </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => togglePlugin(plugin.id, !plugin.enabled)}
-                  className={`px-3 py-1 rounded text-sm ${
-                    plugin.enabled ? "bg-green-500 text-white" : "bg-gray-300 text-gray-700"
-                  }`}
-                >
-                  {plugin.enabled ? "已启用" : "已禁用"}
-                </button>
-                <button
-                  onClick={() => uninstallPlugin(plugin.id)}
-                  className="px-3 py-1 bg-red-500 text-white rounded text-sm"
-                >
-                  卸载
-                </button>
+
+              <div className="mt-3 pt-3 border-t">
+                <h4 className="text-sm font-medium text-gray-700 mb-1">权限</h4>
+                <div className="flex flex-wrap gap-1">
+                  {plugin.permissions.map((permission) => (
+                    <span key={permission} className="inline-block bg-gray-100 text-gray-800 text-xs px-2 py-1 rounded">
+                      {permission}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {plugin.dependencies.length > 0 && (
+                <div className="mt-3 pt-3 border-t">
+                  <h4 className="text-sm font-medium text-gray-700 mb-1">依赖</h4>
+                  <div className="flex flex-wrap gap-1">
+                    {plugin.dependencies.map((dep) => (
+                      <span key={dep} className="inline-block bg-gray-100 text-gray-800 text-xs px-2 py-1 rounded">
+                        {dep}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* 配置模态框 */}
+      {showConfigModal && selectedPlugin && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h3 className="text-xl font-semibold mb-4">配置插件: {selectedPlugin.name}</h3>
+            <div className="mb-4">
+              <p className="text-sm text-gray-600 mb-4">调整插件设置以满足您的需求。</p>
+              <div className="space-y-4">
+                {Object.entries(selectedPlugin.config).map(([key, value]) => (
+                  <div key={key}>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{key}</label>
+                    {typeof value === "boolean" ? (
+                      <input
+                        type="checkbox"
+                        checked={value}
+                        onChange={(e) => {
+                          const newConfig = { ...selectedPlugin.config, [key]: e.target.checked }
+                          selectedPlugin.config = newConfig
+                        }}
+                        className="rounded border-gray-300"
+                      />
+                    ) : typeof value === "number" ? (
+                      <input
+                        type="number"
+                        value={value}
+                        onChange={(e) => {
+                          const newConfig = { ...selectedPlugin.config, [key]: Number(e.target.value) }
+                          selectedPlugin.config = newConfig
+                        }}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      />
+                    ) : (
+                      <input
+                        type="text"
+                        value={value as string}
+                        onChange={(e) => {
+                          const newConfig = { ...selectedPlugin.config, [key]: e.target.value }
+                          selectedPlugin.config = newConfig
+                        }}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      />
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
-
-            <div className="text-xs text-gray-500">权限: {plugin.permissions.join(", ")}</div>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setShowConfigModal(false)}
+                className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
+              >
+                取消
+              </button>
+              <button
+                onClick={() => handleSaveConfig(selectedPlugin.config)}
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              >
+                保存
+              </button>
+            </div>
           </div>
-        ))}
-      </div>
-
-      {plugins.length === 0 && <div className="text-center text-gray-500 py-8">暂无已安装的插件</div>}
+        </div>
+      )}
     </div>
   )
 }

@@ -1,7 +1,8 @@
 "use client"
 
-import React from "react"
+import { useState, useEffect } from "react"
 
+// PWA管理器
 export interface PWAConfig {
   name: string
   shortName: string
@@ -13,6 +14,8 @@ export interface PWAConfig {
   startUrl: string
   scope: string
   icons: PWAIcon[]
+  shortcuts: PWAShortcut[]
+  categories: string[]
 }
 
 export interface PWAIcon {
@@ -20,6 +23,14 @@ export interface PWAIcon {
   sizes: string
   type: string
   purpose?: "any" | "maskable" | "monochrome"
+}
+
+export interface PWAShortcut {
+  name: string
+  shortName?: string
+  description: string
+  url: string
+  icons: PWAIcon[]
 }
 
 export interface InstallPromptEvent extends Event {
@@ -31,8 +42,8 @@ export class PWAManager {
   private static instance: PWAManager
   private deferredPrompt: InstallPromptEvent | null = null
   private isInstalled = false
-  private isOnline = navigator.onLine
-  private registration: ServiceWorkerRegistration | null = null
+  private isStandalone = false
+  private serviceWorker: ServiceWorkerRegistration | null = null
 
   private constructor() {
     this.init()
@@ -45,152 +56,85 @@ export class PWAManager {
     return PWAManager.instance
   }
 
-  // 初始化PWA
-  private async init(): Promise<void> {
+  private async init() {
     if (typeof window === "undefined") return
+
+    // 检查是否为独立模式
+    this.isStandalone =
+      window.matchMedia("(display-mode: standalone)").matches || (window.navigator as any).standalone === true
+
+    // 检查是否已安装
+    this.isInstalled = this.isStandalone || localStorage.getItem("pwa-installed") === "true"
+
+    // 监听安装提示事件
+    window.addEventListener("beforeinstallprompt", (e) => {
+      e.preventDefault()
+      this.deferredPrompt = e as InstallPromptEvent
+      this.dispatchEvent("installable", { canInstall: true })
+    })
+
+    // 监听应用安装事件
+    window.addEventListener("appinstalled", () => {
+      this.isInstalled = true
+      localStorage.setItem("pwa-installed", "true")
+      this.deferredPrompt = null
+      this.dispatchEvent("installed", { installed: true })
+    })
 
     // 注册Service Worker
     await this.registerServiceWorker()
 
-    // 监听安装提示
-    this.setupInstallPrompt()
-
-    // 监听网络状态
-    this.setupNetworkListener()
-
-    // 检查是否已安装
-    this.checkInstallStatus()
-
-    // 生成manifest
-    this.generateManifest()
+    // 检查更新
+    this.checkForUpdates()
   }
 
   // 注册Service Worker
   private async registerServiceWorker(): Promise<void> {
-    if ("serviceWorker" in navigator) {
-      try {
-        this.registration = await navigator.serviceWorker.register("/sw.js")
-        console.log("Service Worker注册成功:", this.registration)
+    if (!("serviceWorker" in navigator)) {
+      console.warn("Service Worker不支持")
+      return
+    }
 
-        // 监听更新
-        this.registration.addEventListener("updatefound", () => {
-          const newWorker = this.registration!.installing
-          if (newWorker) {
-            newWorker.addEventListener("statechange", () => {
-              if (newWorker.state === "installed" && navigator.serviceWorker.controller) {
-                this.showUpdateNotification()
-              }
-            })
-          }
-        })
-      } catch (error) {
-        console.error("Service Worker注册失败:", error)
-      }
+    try {
+      const registration = await navigator.serviceWorker.register("/sw.js", {
+        scope: "/",
+      })
+
+      this.serviceWorker = registration
+
+      // 监听更新
+      registration.addEventListener("updatefound", () => {
+        const newWorker = registration.installing
+        if (newWorker) {
+          newWorker.addEventListener("statechange", () => {
+            if (newWorker.state === "installed" && navigator.serviceWorker.controller) {
+              this.dispatchEvent("updateavailable", { registration })
+            }
+          })
+        }
+      })
+
+      console.log("Service Worker注册成功")
+    } catch (error) {
+      console.error("Service Worker注册失败:", error)
     }
   }
 
-  // 设置安装提示
-  private setupInstallPrompt(): void {
-    window.addEventListener("beforeinstallprompt", (e) => {
-      e.preventDefault()
-      this.deferredPrompt = e as InstallPromptEvent
-      this.showInstallButton()
-    })
+  // 检查更新
+  private async checkForUpdates(): Promise<void> {
+    if (!this.serviceWorker) return
 
-    window.addEventListener("appinstalled", () => {
-      this.isInstalled = true
-      this.hideInstallButton()
-      this.showInstallSuccessMessage()
-    })
-  }
-
-  // 设置网络监听
-  private setupNetworkListener(): void {
-    window.addEventListener("online", () => {
-      this.isOnline = true
-      this.showNetworkStatus("已连接到网络")
-      this.syncOfflineData()
-    })
-
-    window.addEventListener("offline", () => {
-      this.isOnline = false
-      this.showNetworkStatus("网络连接已断开，应用将在离线模式下运行")
-    })
-  }
-
-  // 检查安装状态
-  private checkInstallStatus(): void {
-    // 检查是否在独立模式下运行
-    if (window.matchMedia("(display-mode: standalone)").matches) {
-      this.isInstalled = true
-    }
-
-    // 检查是否从主屏幕启动
-    if ((navigator as any).standalone === true) {
-      this.isInstalled = true
-    }
-  }
-
-  // 生成manifest文件
-  private generateManifest(): void {
-    const config: PWAConfig = {
-      name: "AI搜索助手",
-      shortName: "AI搜索",
-      description: "智能搜索和内容生成助手",
-      themeColor: "#2563eb",
-      backgroundColor: "#ffffff",
-      display: "standalone",
-      orientation: "portrait",
-      startUrl: "/",
-      scope: "/",
-      icons: [
-        {
-          src: "/icon-192.png",
-          sizes: "192x192",
-          type: "image/png",
-          purpose: "any",
-        },
-        {
-          src: "/icon-512.png",
-          sizes: "512x512",
-          type: "image/png",
-          purpose: "any",
-        },
-        {
-          src: "/icon-maskable-192.png",
-          sizes: "192x192",
-          type: "image/png",
-          purpose: "maskable",
-        },
-      ],
-    }
-
-    // 动态创建manifest link
-    const manifestLink = document.createElement("link")
-    manifestLink.rel = "manifest"
-    manifestLink.href = "data:application/json," + encodeURIComponent(JSON.stringify(config))
-    document.head.appendChild(manifestLink)
-  }
-
-  // 显示安装按钮
-  private showInstallButton(): void {
-    const installButton = document.getElementById("pwa-install-button")
-    if (installButton) {
-      installButton.style.display = "block"
-    }
-  }
-
-  // 隐藏安装按钮
-  private hideInstallButton(): void {
-    const installButton = document.getElementById("pwa-install-button")
-    if (installButton) {
-      installButton.style.display = "none"
+    try {
+      await this.serviceWorker.update()
+    } catch (error) {
+      console.error("检查更新失败:", error)
     }
   }
 
   // 安装应用
   async installApp(): Promise<boolean> {
     if (!this.deferredPrompt) {
+      console.warn("无法安装应用：没有安装提示")
       return false
     }
 
@@ -199,10 +143,10 @@ export class PWAManager {
       const choiceResult = await this.deferredPrompt.userChoice
 
       if (choiceResult.outcome === "accepted") {
-        console.log("用户接受了安装提示")
+        console.log("用户接受了安装")
         return true
       } else {
-        console.log("用户拒绝了安装提示")
+        console.log("用户拒绝了安装")
         return false
       }
     } catch (error) {
@@ -213,165 +157,316 @@ export class PWAManager {
     }
   }
 
-  // 显示网络状态
-  private showNetworkStatus(message: string): void {
-    // 创建或更新网络状态提示
-    let statusElement = document.getElementById("network-status")
-    if (!statusElement) {
-      statusElement = document.createElement("div")
-      statusElement.id = "network-status"
-      statusElement.className = "fixed top-4 right-4 px-4 py-2 rounded-lg text-white z-50"
-      document.body.appendChild(statusElement)
-    }
+  // 应用更新
+  async updateApp(): Promise<void> {
+    if (!this.serviceWorker) return
 
-    statusElement.textContent = message
-    statusElement.className = `fixed top-4 right-4 px-4 py-2 rounded-lg text-white z-50 ${
-      this.isOnline ? "bg-green-500" : "bg-red-500"
-    }`
-
-    // 3秒后自动隐藏
-    setTimeout(() => {
-      if (statusElement) {
-        statusElement.remove()
-      }
-    }, 3000)
-  }
-
-  // 显示安装成功消息
-  private showInstallSuccessMessage(): void {
-    this.showNetworkStatus("应用安装成功！")
-  }
-
-  // 显示更新通知
-  private showUpdateNotification(): void {
-    const updateNotification = document.createElement("div")
-    updateNotification.className = "fixed bottom-4 left-4 right-4 bg-blue-500 text-white p-4 rounded-lg z-50"
-    updateNotification.innerHTML = `
-      <div class="flex justify-between items-center">
-        <span>应用有新版本可用</span>
-        <div>
-          <button id="update-app" class="bg-white text-blue-500 px-3 py-1 rounded mr-2">更新</button>
-          <button id="dismiss-update" class="text-white">稍后</button>
-        </div>
-      </div>
-    `
-
-    document.body.appendChild(updateNotification)
-
-    // 绑定事件
-    document.getElementById("update-app")?.addEventListener("click", () => {
-      this.updateApp()
-      updateNotification.remove()
-    })
-
-    document.getElementById("dismiss-update")?.addEventListener("click", () => {
-      updateNotification.remove()
-    })
-  }
-
-  // 更新应用
-  private async updateApp(): Promise<void> {
-    if (this.registration && this.registration.waiting) {
-      this.registration.waiting.postMessage({ type: "SKIP_WAITING" })
+    const waitingWorker = this.serviceWorker.waiting
+    if (waitingWorker) {
+      waitingWorker.postMessage({ type: "SKIP_WAITING" })
       window.location.reload()
     }
   }
 
-  // 同步离线数据
-  private async syncOfflineData(): Promise<void> {
-    if ("serviceWorker" in navigator && this.registration) {
-      try {
-        await this.registration.sync.register("background-sync")
-        console.log("后台同步已注册")
-      } catch (error) {
-        console.error("后台同步注册失败:", error)
-      }
-    }
-  }
-
-  // 请求推送通知权限
-  async requestNotificationPermission(): Promise<boolean> {
-    if (!("Notification" in window)) {
-      console.log("此浏览器不支持通知")
-      return false
-    }
-
-    if (Notification.permission === "granted") {
-      return true
-    }
-
-    if (Notification.permission !== "denied") {
-      const permission = await Notification.requestPermission()
-      return permission === "granted"
-    }
-
-    return false
-  }
-
-  // 发送推送通知
-  async sendNotification(title: string, options?: NotificationOptions): Promise<void> {
-    const hasPermission = await this.requestNotificationPermission()
-
-    if (hasPermission) {
-      if (this.registration) {
-        await this.registration.showNotification(title, {
-          icon: "/icon-192.png",
-          badge: "/badge-72.png",
-          ...options,
-        })
-      } else {
-        new Notification(title, {
-          icon: "/icon-192.png",
-          ...options,
-        })
-      }
-    }
-  }
-
-  // 获取状态
-  getStatus() {
+  // 获取安装状态
+  getInstallStatus(): {
+    isInstallable: boolean
+    isInstalled: boolean
+    isStandalone: boolean
+  } {
     return {
+      isInstallable: !!this.deferredPrompt,
       isInstalled: this.isInstalled,
-      isOnline: this.isOnline,
-      canInstall: !!this.deferredPrompt,
-      hasServiceWorker: !!this.registration,
+      isStandalone: this.isStandalone,
     }
+  }
+
+  // 生成Web App Manifest
+  static generateManifest(config: PWAConfig): string {
+    const manifest = {
+      name: config.name,
+      short_name: config.shortName,
+      description: config.description,
+      start_url: config.startUrl,
+      scope: config.scope,
+      display: config.display,
+      orientation: config.orientation,
+      theme_color: config.themeColor,
+      background_color: config.backgroundColor,
+      icons: config.icons,
+      shortcuts: config.shortcuts,
+      categories: config.categories,
+    }
+
+    return JSON.stringify(manifest, null, 2)
+  }
+
+  // 生成Service Worker
+  static generateServiceWorker(options: {
+    cacheName: string
+    cacheUrls: string[]
+    offlineUrl?: string
+  }): string {
+    return `
+const CACHE_NAME = '${options.cacheName}'
+const CACHE_URLS = ${JSON.stringify(options.cacheUrls)}
+const OFFLINE_URL = '${options.offlineUrl || "/offline"}'
+
+// 安装事件
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then((cache) => {
+        return cache.addAll([...CACHE_URLS, OFFLINE_URL])
+      })
+      .then(() => {
+        return self.skipWaiting()
+      })
+  )
+})
+
+// 激活事件
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames.map((cacheName) => {
+          if (cacheName !== CACHE_NAME) {
+            return caches.delete(cacheName)
+          }
+        })
+      )
+    }).then(() => {
+      return self.clients.claim()
+    })
+  )
+})
+
+// 拦截请求
+self.addEventListener('fetch', (event) => {
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request)
+        .catch(() => {
+          return caches.open(CACHE_NAME)
+            .then((cache) => {
+              return cache.match(OFFLINE_URL)
+            })
+        })
+    )
+  } else {
+    event.respondWith(
+      caches.match(event.request)
+        .then((response) => {
+          return response || fetch(event.request)
+        })
+    )
+  }
+})
+
+// 消息处理
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting()
+  }
+})
+`
+  }
+
+  // 事件分发
+  private dispatchEvent(type: string, detail: any): void {
+    const event = new CustomEvent(`pwa-${type}`, { detail })
+    window.dispatchEvent(event)
+  }
+
+  // 离线检测
+  static isOnline(): boolean {
+    return navigator.onLine
+  }
+
+  // 网络状态监听
+  static onNetworkChange(callback: (isOnline: boolean) => void): () => void {
+    const handleOnline = () => callback(true)
+    const handleOffline = () => callback(false)
+
+    window.addEventListener("online", handleOnline)
+    window.addEventListener("offline", handleOffline)
+
+    return () => {
+      window.removeEventListener("online", handleOnline)
+      window.removeEventListener("offline", handleOffline)
+    }
+  }
+
+  // 获取网络信息
+  static getNetworkInfo(): {
+    type: string
+    effectiveType: string
+    downlink: number
+    rtt: number
+  } | null {
+    const connection =
+      (navigator as any).connection || (navigator as any).mozConnection || (navigator as any).webkitConnection
+
+    if (!connection) return null
+
+    return {
+      type: connection.type || "unknown",
+      effectiveType: connection.effectiveType || "unknown",
+      downlink: connection.downlink || 0,
+      rtt: connection.rtt || 0,
+    }
+  }
+
+  // 推送通知
+  static async requestNotificationPermission(): Promise<NotificationPermission> {
+    if (!("Notification" in window)) {
+      throw new Error("浏览器不支持通知")
+    }
+
+    return await Notification.requestPermission()
+  }
+
+  static async showNotification(title: string, options?: NotificationOptions): Promise<void> {
+    if (Notification.permission !== "granted") {
+      throw new Error("通知权限未授予")
+    }
+
+    if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
+      // 通过Service Worker显示通知
+      navigator.serviceWorker.controller.postMessage({
+        type: "SHOW_NOTIFICATION",
+        title,
+        options,
+      })
+    } else {
+      // 直接显示通知
+      new Notification(title, options)
+    }
+  }
+
+  // 后台同步
+  static async registerBackgroundSync(tag: string): Promise<void> {
+    if (!("serviceWorker" in navigator) || !("sync" in window.ServiceWorkerRegistration.prototype)) {
+      throw new Error("浏览器不支持后台同步")
+    }
+
+    const registration = await navigator.serviceWorker.ready
+    await registration.sync.register(tag)
+  }
+
+  // 应用快捷方式
+  static async addShortcut(shortcut: PWAShortcut): Promise<void> {
+    if (!("getInstalledRelatedApps" in navigator)) {
+      throw new Error("浏览器不支持应用快捷方式")
+    }
+
+    // 这里需要通过Service Worker或其他方式添加快捷方式
+    console.log("添加快捷方式:", shortcut)
+  }
+}
+
+// PWA Hook
+export function usePWA() {
+  const [installStatus, setInstallStatus] = useState({
+    isInstallable: false,
+    isInstalled: false,
+    isStandalone: false,
+  })
+  const [isOnline, setIsOnline] = useState(true)
+  const [updateAvailable, setUpdateAvailable] = useState(false)
+
+  useEffect(() => {
+    const pwa = PWAManager.getInstance()
+
+    // 获取初始状态
+    setInstallStatus(pwa.getInstallStatus())
+    setIsOnline(PWAManager.isOnline())
+
+    // 监听PWA事件
+    const handleInstallable = () => {
+      setInstallStatus(pwa.getInstallStatus())
+    }
+
+    const handleInstalled = () => {
+      setInstallStatus(pwa.getInstallStatus())
+    }
+
+    const handleUpdateAvailable = () => {
+      setUpdateAvailable(true)
+    }
+
+    window.addEventListener("pwa-installable", handleInstallable)
+    window.addEventListener("pwa-installed", handleInstalled)
+    window.addEventListener("pwa-updateavailable", handleUpdateAvailable)
+
+    // 监听网络状态
+    const unsubscribeNetwork = PWAManager.onNetworkChange(setIsOnline)
+
+    return () => {
+      window.removeEventListener("pwa-installable", handleInstallable)
+      window.removeEventListener("pwa-installed", handleInstalled)
+      window.removeEventListener("pwa-updateavailable", handleUpdateAvailable)
+      unsubscribeNetwork()
+    }
+  }, [])
+
+  const installApp = async () => {
+    const pwa = PWAManager.getInstance()
+    return await pwa.installApp()
+  }
+
+  const updateApp = async () => {
+    const pwa = PWAManager.getInstance()
+    await pwa.updateApp()
+    setUpdateAvailable(false)
+  }
+
+  return {
+    ...installStatus,
+    isOnline,
+    updateAvailable,
+    installApp,
+    updateApp,
+    networkInfo: PWAManager.getNetworkInfo(),
   }
 }
 
 // PWA安装按钮组件
-export const PWAInstallButton: React.FC = () => {
-  const [canInstall, setCanInstall] = React.useState(false)
-  const [isInstalling, setIsInstalling] = React.useState(false)
-  const pwaManager = PWAManager.getInstance()
+export function PWAInstallButton() {
+  const [canInstall, setCanInstall] = useState(false)
+  const [isInstalling, setIsInstalling] = useState(false)
+  const [pwaManager, setPwaManager] = useState<PWAManager | null>(null)
 
-  React.useEffect(() => {
-    const checkInstallability = () => {
-      const status = pwaManager.getStatus()
-      setCanInstall(status.canInstall && !status.isInstalled)
-    }
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const manager = PWAManager.getInstance()
+      setPwaManager(manager)
 
-    checkInstallability()
+      const status = manager.getInstallStatus()
+      setCanInstall(status.isInstallable && !status.isInstalled)
 
-    // 监听安装提示事件
-    const handleBeforeInstallPrompt = () => {
-      setCanInstall(true)
-    }
+      const handleBeforeInstallPrompt = () => {
+        setCanInstall(true)
+      }
 
-    const handleAppInstalled = () => {
-      setCanInstall(false)
-    }
+      const handleAppInstalled = () => {
+        setCanInstall(false)
+      }
 
-    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt)
-    window.addEventListener("appinstalled", handleAppInstalled)
+      window.addEventListener("pwa-installable", handleBeforeInstallPrompt)
+      window.addEventListener("appinstalled", handleAppInstalled)
 
-    return () => {
-      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt)
-      window.removeEventListener("appinstalled", handleAppInstalled)
+      return () => {
+        window.removeEventListener("pwa-installable", handleBeforeInstallPrompt)
+        window.removeEventListener("appinstalled", handleAppInstalled)
+      }
     }
   }, [])
 
   const handleInstall = async () => {
+    if (!pwaManager) return
+
     setIsInstalling(true)
     try {
       const success = await pwaManager.installApp()
@@ -391,10 +486,9 @@ export const PWAInstallButton: React.FC = () => {
 
   return (
     <button
-      id="pwa-install-button"
       onClick={handleInstall}
       disabled={isInstalling}
-      className="fixed bottom-4 right-4 bg-blue-500 text-white px-4 py-2 rounded-lg shadow-lg hover:bg-blue-600 disabled:opacity-50 z-50"
+      className="fixed bottom-4 right-4 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg hover:bg-blue-700 disabled:opacity-50 z-50"
     >
       {isInstalling ? "安装中..." : "安装应用"}
     </button>
@@ -402,19 +496,23 @@ export const PWAInstallButton: React.FC = () => {
 }
 
 // 网络状态组件
-export const NetworkStatus: React.FC = () => {
-  const [isOnline, setIsOnline] = React.useState(navigator.onLine)
+export function NetworkStatus() {
+  const [isOnline, setIsOnline] = useState(true)
 
-  React.useEffect(() => {
-    const handleOnline = () => setIsOnline(true)
-    const handleOffline = () => setIsOnline(false)
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setIsOnline(navigator.onLine)
 
-    window.addEventListener("online", handleOnline)
-    window.addEventListener("offline", handleOffline)
+      const handleOnline = () => setIsOnline(true)
+      const handleOffline = () => setIsOnline(false)
 
-    return () => {
-      window.removeEventListener("online", handleOnline)
-      window.removeEventListener("offline", handleOffline)
+      window.addEventListener("online", handleOnline)
+      window.addEventListener("offline", handleOffline)
+
+      return () => {
+        window.removeEventListener("online", handleOnline)
+        window.removeEventListener("offline", handleOffline)
+      }
     }
   }, [])
 
