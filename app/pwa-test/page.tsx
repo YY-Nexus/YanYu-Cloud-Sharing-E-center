@@ -1,182 +1,72 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Progress } from "@/components/ui/progress"
 import {
-  Smartphone,
   Wifi,
   WifiOff,
   Download,
   Bell,
+  Smartphone,
+  Database,
   FolderSyncIcon as Sync,
+  Shield,
   CheckCircle,
   XCircle,
   AlertCircle,
-  Monitor,
+  RefreshCw,
 } from "lucide-react"
 
-interface NetworkInfo {
-  type: string
-  effectiveType: string
-  downlink: number
-  rtt: number
+interface TestResult {
+  name: string
+  status: "pending" | "running" | "success" | "error"
+  message: string
+  details?: string
 }
 
-interface PWAState {
-  isInstallable: boolean
-  isInstalled: boolean
-  isStandalone: boolean
-  isOnline: boolean
-  updateAvailable: boolean
-  networkInfo: NetworkInfo | null
-}
-
-// PWA管理器类
-class PWAManager {
-  static async requestNotificationPermission(): Promise<boolean> {
-    if (!("Notification" in window)) {
-      return false
-    }
-
-    const permission = await Notification.requestPermission()
-    return permission === "granted"
-  }
-
-  static async showNotification(title: string, options: NotificationOptions = {}) {
-    if (!("Notification" in window) || Notification.permission !== "granted") {
-      return
-    }
-
-    return new Notification(title, options)
-  }
-}
-
-// 网络状态组件
-function NetworkStatus() {
+export default function PWATestPage() {
   const [isOnline, setIsOnline] = useState(true)
+  const [installPrompt, setInstallPrompt] = useState<any>(null)
+  const [isInstalled, setIsInstalled] = useState(false)
+  const [testResults, setTestResults] = useState<TestResult[]>([
+    { name: "网络状态检测", status: "pending", message: "等待测试..." },
+    { name: "Service Worker", status: "pending", message: "等待测试..." },
+    { name: "离线功能", status: "pending", message: "等待测试..." },
+    { name: "应用安装", status: "pending", message: "等待测试..." },
+    { name: "推送通知", status: "pending", message: "等待测试..." },
+    { name: "缓存管理", status: "pending", message: "等待测试..." },
+    { name: "后台同步", status: "pending", message: "等待测试..." },
+    { name: "数据持久化", status: "pending", message: "等待测试..." },
+  ])
+  const [currentTest, setCurrentTest] = useState(-1)
+  const [overallProgress, setOverallProgress] = useState(0)
 
   useEffect(() => {
-    setIsOnline(navigator.onLine)
-
+    // 监听网络状态
     const handleOnline = () => setIsOnline(true)
     const handleOffline = () => setIsOnline(false)
 
     window.addEventListener("online", handleOnline)
     window.addEventListener("offline", handleOffline)
 
-    return () => {
-      window.removeEventListener("online", handleOnline)
-      window.removeEventListener("offline", handleOffline)
-    }
-  }, [])
-
-  if (isOnline) return null
-
-  return (
-    <div className="fixed top-0 left-0 right-0 bg-red-600 text-white text-center py-2 z-50">
-      <WifiOff className="inline h-4 w-4 mr-2" />
-      您当前处于离线状态
-    </div>
-  )
-}
-
-// PWA安装按钮组件
-function PWAInstallButton() {
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null)
-  const [isInstallable, setIsInstallable] = useState(false)
-
-  useEffect(() => {
-    const handleBeforeInstallPrompt = (e: Event) => {
-      e.preventDefault()
-      setDeferredPrompt(e)
-      setIsInstallable(true)
-    }
-
-    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt)
-
-    return () => {
-      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt)
-    }
-  }, [])
-
-  const handleInstall = async () => {
-    if (!deferredPrompt) return
-
-    deferredPrompt.prompt()
-    const { outcome } = await deferredPrompt.userChoice
-
-    if (outcome === "accepted") {
-      setIsInstallable(false)
-      setDeferredPrompt(null)
-    }
-  }
-
-  if (!isInstallable) return null
-
-  return (
-    <div className="fixed bottom-4 right-4 z-50">
-      <Button onClick={handleInstall} className="shadow-lg">
-        <Download className="h-4 w-4 mr-2" />
-        安装应用
-      </Button>
-    </div>
-  )
-}
-
-// 自定义PWA Hook
-function usePWA(): PWAState {
-  const [state, setState] = useState<PWAState>({
-    isInstallable: false,
-    isInstalled: false,
-    isStandalone: false,
-    isOnline: true,
-    updateAvailable: false,
-    networkInfo: null,
-  })
-
-  useEffect(() => {
-    // 检查是否为独立应用模式
-    const isStandalone =
-      window.matchMedia("(display-mode: standalone)").matches || (window.navigator as any).standalone === true
-
-    // 检查网络状态
-    const isOnline = navigator.onLine
-
-    // 获取网络信息
-    let networkInfo: NetworkInfo | null = null
-    if ("connection" in navigator) {
-      const connection = (navigator as any).connection
-      networkInfo = {
-        type: connection.type || "unknown",
-        effectiveType: connection.effectiveType || "unknown",
-        downlink: connection.downlink || 0,
-        rtt: connection.rtt || 0,
-      }
-    }
-
-    setState((prev) => ({
-      ...prev,
-      isStandalone,
-      isOnline,
-      networkInfo,
-    }))
-
-    // 监听网络状态变化
-    const handleOnline = () => setState((prev) => ({ ...prev, isOnline: true }))
-    const handleOffline = () => setState((prev) => ({ ...prev, isOnline: false }))
-
-    window.addEventListener("online", handleOnline)
-    window.addEventListener("offline", handleOffline)
+    setIsOnline(navigator.onLine)
 
     // 监听安装提示
-    const handleBeforeInstallPrompt = () => {
-      setState((prev) => ({ ...prev, isInstallable: true }))
+    const handleBeforeInstallPrompt = (e: any) => {
+      e.preventDefault()
+      setInstallPrompt(e)
     }
 
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt)
+
+    // 检查是否已安装
+    if (window.matchMedia("(display-mode: standalone)").matches) {
+      setIsInstalled(true)
+    }
 
     return () => {
       window.removeEventListener("online", handleOnline)
@@ -185,543 +75,456 @@ function usePWA(): PWAState {
     }
   }, [])
 
-  const installApp = async (): Promise<boolean> => {
-    // 这里应该触发安装提示
-    return false
+  const updateTestResult = (index: number, status: TestResult["status"], message: string, details?: string) => {
+    setTestResults((prev) => prev.map((test, i) => (i === index ? { ...test, status, message, details } : test)))
   }
 
-  const updateApp = async (): Promise<void> => {
-    if ("serviceWorker" in navigator) {
-      const registration = await navigator.serviceWorker.getRegistration()
-      if (registration) {
-        registration.update()
+  const runAllTests = async () => {
+    setCurrentTest(0)
+    setOverallProgress(0)
+
+    for (let i = 0; i < testResults.length; i++) {
+      setCurrentTest(i)
+      updateTestResult(i, "running", "测试中...")
+
+      try {
+        await runSingleTest(i)
+      } catch (error) {
+        updateTestResult(i, "error", "测试失败", error instanceof Error ? error.message : "未知错误")
       }
+
+      setOverallProgress(((i + 1) / testResults.length) * 100)
+      await new Promise((resolve) => setTimeout(resolve, 500))
+    }
+
+    setCurrentTest(-1)
+  }
+
+  const runSingleTest = async (testIndex: number) => {
+    switch (testIndex) {
+      case 0: // 网络状态检测
+        await testNetworkStatus()
+        break
+      case 1: // Service Worker
+        await testServiceWorker()
+        break
+      case 2: // 离线功能
+        await testOfflineCapability()
+        break
+      case 3: // 应用安装
+        await testAppInstallation()
+        break
+      case 4: // 推送通知
+        await testPushNotifications()
+        break
+      case 5: // 缓存管理
+        await testCacheManagement()
+        break
+      case 6: // 后台同步
+        await testBackgroundSync()
+        break
+      case 7: // 数据持久化
+        await testDataPersistence()
+        break
     }
   }
 
-  return {
-    ...state,
-    installApp,
-    updateApp,
-  } as PWAState & {
-    installApp: () => Promise<boolean>
-    updateApp: () => Promise<void>
+  const testNetworkStatus = async () => {
+    const online = navigator.onLine
+    const connection = (navigator as any).connection
+
+    let details = `在线状态: ${online ? "在线" : "离线"}`
+    if (connection) {
+      details += `\n连接类型: ${connection.effectiveType || "未知"}`
+      details += `\n下载速度: ${connection.downlink || "未知"} Mbps`
+    }
+
+    updateTestResult(0, "success", online ? "网络连接正常" : "当前离线状态", details)
   }
-}
 
-export default function PWATestPage() {
-  const { isInstallable, isInstalled, isStandalone, isOnline, updateAvailable, networkInfo } = usePWA()
-
-  const [notifications, setNotifications] = useState<NotificationPermission>("default")
-  const [testResults, setTestResults] = useState<{
-    serviceWorker: boolean
-    manifest: boolean
-    icons: boolean
-    offline: boolean
-    installPrompt: boolean
-  }>({
-    serviceWorker: false,
-    manifest: false,
-    icons: false,
-    offline: false,
-    installPrompt: false,
-  })
-  const [isTestingOffline, setIsTestingOffline] = useState(false)
-  const [offlineTestResult, setOfflineTestResult] = useState<string>("")
-
-  useEffect(() => {
-    checkPWAFeatures()
-    checkNotificationPermission()
-  }, [])
-
-  const checkPWAFeatures = async () => {
-    const results = { ...testResults }
-
-    // 检查Service Worker
+  const testServiceWorker = async () => {
     if ("serviceWorker" in navigator) {
       try {
         const registration = await navigator.serviceWorker.getRegistration()
-        results.serviceWorker = !!registration
+        if (registration) {
+          const details = `状态: ${registration.active ? "活跃" : "未激活"}\n作用域: ${registration.scope}`
+          updateTestResult(1, "success", "Service Worker 运行正常", details)
+        } else {
+          updateTestResult(1, "error", "Service Worker 未注册")
+        }
       } catch (error) {
-        results.serviceWorker = false
+        updateTestResult(1, "error", "Service Worker 测试失败", error instanceof Error ? error.message : "未知错误")
       }
+    } else {
+      updateTestResult(1, "error", "浏览器不支持 Service Worker")
     }
-
-    // 检查Manifest
-    const manifestLink = document.querySelector('link[rel="manifest"]')
-    results.manifest = !!manifestLink
-
-    // 检查图标
-    const icons = document.querySelectorAll('link[rel*="icon"]')
-    results.icons = icons.length > 0
-
-    // 检查安装提示
-    results.installPrompt = isInstallable
-
-    setTestResults(results)
   }
 
-  const checkNotificationPermission = () => {
+  const testOfflineCapability = async () => {
+    try {
+      const response = await fetch("/api/test-offline")
+      if (response.ok) {
+        const data = await response.json()
+        updateTestResult(2, "success", "离线功能正常", `数据项: ${data.data?.searchResults?.length || 0}`)
+      } else {
+        updateTestResult(2, "error", "离线API响应异常")
+      }
+    } catch (error) {
+      // 网络错误时测试缓存
+      try {
+        const cachedResponse = await caches.match("/api/test-offline")
+        if (cachedResponse) {
+          updateTestResult(2, "success", "离线缓存可用", "使用缓存数据")
+        } else {
+          updateTestResult(2, "error", "离线缓存不可用")
+        }
+      } catch (cacheError) {
+        updateTestResult(2, "error", "离线功能测试失败")
+      }
+    }
+  }
+
+  const testAppInstallation = async () => {
+    if (isInstalled) {
+      updateTestResult(3, "success", "应用已安装", "运行在独立模式")
+    } else if (installPrompt) {
+      updateTestResult(3, "success", "支持应用安装", "可以安装为PWA应用")
+    } else {
+      updateTestResult(3, "error", "不支持应用安装", "可能已安装或浏览器不支持")
+    }
+  }
+
+  const testPushNotifications = async () => {
     if ("Notification" in window) {
-      setNotifications(Notification.permission)
+      const permission = Notification.permission
+
+      if (permission === "granted") {
+        updateTestResult(4, "success", "通知权限已授予", "可以发送推送通知")
+      } else if (permission === "default") {
+        updateTestResult(4, "pending", "需要通知权限", "点击下方按钮请求权限")
+      } else {
+        updateTestResult(4, "error", "通知权限被拒绝", "用户拒绝了通知权限")
+      }
+    } else {
+      updateTestResult(4, "error", "浏览器不支持通知")
+    }
+  }
+
+  const testCacheManagement = async () => {
+    if ("caches" in window) {
+      try {
+        const cacheNames = await caches.keys()
+        const totalCaches = cacheNames.length
+
+        let totalSize = 0
+        for (const cacheName of cacheNames) {
+          const cache = await caches.open(cacheName)
+          const requests = await cache.keys()
+          totalSize += requests.length
+        }
+
+        const details = `缓存数量: ${totalCaches}\n缓存项目: ${totalSize}`
+        updateTestResult(5, "success", "缓存管理正常", details)
+      } catch (error) {
+        updateTestResult(5, "error", "缓存管理测试失败")
+      }
+    } else {
+      updateTestResult(5, "error", "浏览器不支持缓存API")
+    }
+  }
+
+  const testBackgroundSync = async () => {
+    if ("serviceWorker" in navigator && "sync" in window.ServiceWorkerRegistration.prototype) {
+      try {
+        const registration = await navigator.serviceWorker.ready
+        await registration.sync.register("background-sync")
+        updateTestResult(6, "success", "后台同步可用", "已注册后台同步任务")
+      } catch (error) {
+        updateTestResult(6, "error", "后台同步注册失败")
+      }
+    } else {
+      updateTestResult(6, "error", "浏览器不支持后台同步")
+    }
+  }
+
+  const testDataPersistence = async () => {
+    try {
+      // 测试 localStorage
+      const testKey = "pwa-test-data"
+      const testData = { timestamp: Date.now(), test: true }
+
+      localStorage.setItem(testKey, JSON.stringify(testData))
+      const retrieved = JSON.parse(localStorage.getItem(testKey) || "{}")
+
+      if (retrieved.test) {
+        localStorage.removeItem(testKey)
+
+        // 测试 IndexedDB
+        if ("indexedDB" in window) {
+          updateTestResult(7, "success", "数据持久化正常", "localStorage 和 IndexedDB 可用")
+        } else {
+          updateTestResult(7, "success", "基础持久化可用", "仅 localStorage 可用")
+        }
+      } else {
+        updateTestResult(7, "error", "数据持久化失败")
+      }
+    } catch (error) {
+      updateTestResult(7, "error", "数据持久化测试失败")
+    }
+  }
+
+  const installApp = async () => {
+    if (installPrompt) {
+      try {
+        const result = await installPrompt.prompt()
+        if (result.outcome === "accepted") {
+          setIsInstalled(true)
+          setInstallPrompt(null)
+          updateTestResult(3, "success", "应用安装成功", "应用已添加到主屏幕")
+        }
+      } catch (error) {
+        console.error("安装失败:", error)
+      }
     }
   }
 
   const requestNotificationPermission = async () => {
-    try {
-      const permission = await PWAManager.requestNotificationPermission()
-      setNotifications(permission ? "granted" : "denied")
+    if ("Notification" in window) {
+      try {
+        const permission = await Notification.requestPermission()
+        if (permission === "granted") {
+          updateTestResult(4, "success", "通知权限已授予", "可以发送推送通知")
 
-      if (permission) {
-        await PWAManager.showNotification("测试通知", {
-          body: "通知功能已成功启用！",
-          icon: "/icon-192.png",
-        })
-      }
-    } catch (error) {
-      console.error("请求通知权限失败:", error)
-    }
-  }
-
-  const testOfflineMode = async () => {
-    setIsTestingOffline(true)
-    setOfflineTestResult("")
-
-    try {
-      // 模拟离线测试
-      const testUrl = "/api/test-offline"
-
-      // 首先在线获取数据
-      const onlineResponse = await fetch(testUrl)
-      if (onlineResponse.ok) {
-        setOfflineTestResult("✅ 在线模式：数据获取成功")
-      }
-
-      // 模拟离线情况（通过Service Worker缓存）
-      setTimeout(() => {
-        setOfflineTestResult((prev) => prev + "\n✅ 离线模式：缓存数据可用")
-        setIsTestingOffline(false)
-      }, 2000)
-    } catch (error) {
-      setOfflineTestResult("❌ 离线测试失败: " + error)
-      setIsTestingOffline(false)
-    }
-  }
-
-  const handleInstallApp = async () => {
-    try {
-      alert("请在浏览器地址栏或菜单中查找安装或添加到主屏幕选项")
-    } catch (error) {
-      alert("安装过程中出现错误: " + error)
-    }
-  }
-
-  const handleUpdateApp = async () => {
-    try {
-      if ("serviceWorker" in navigator) {
-        const registration = await navigator.serviceWorker.getRegistration()
-        if (registration) {
-          await registration.update()
-          alert("应用更新成功！")
+          // 发送测试通知
+          new Notification("PWA测试", {
+            body: "通知功能测试成功！",
+            icon: "/icon-192.png",
+            badge: "/icon-72.png",
+          })
+        } else {
+          updateTestResult(4, "error", "通知权限被拒绝")
         }
+      } catch (error) {
+        updateTestResult(4, "error", "请求通知权限失败")
       }
-    } catch (error) {
-      alert("更新失败: " + error)
     }
   }
 
-  const getFeatureStatus = (status: boolean) => {
-    return status ? (
-      <Badge className="bg-green-100 text-green-800">
-        <CheckCircle className="h-3 w-3 mr-1" />
-        支持
-      </Badge>
-    ) : (
-      <Badge variant="destructive">
-        <XCircle className="h-3 w-3 mr-1" />
-        不支持
-      </Badge>
-    )
+  const clearAllCaches = async () => {
+    if ("caches" in window) {
+      try {
+        const cacheNames = await caches.keys()
+        await Promise.all(cacheNames.map((name) => caches.delete(name)))
+        updateTestResult(5, "success", "缓存已清理", "所有缓存已删除")
+      } catch (error) {
+        updateTestResult(5, "error", "清理缓存失败")
+      }
+    }
   }
 
-  const getNetworkStatus = () => {
-    if (!isOnline) {
-      return (
-        <Badge variant="destructive">
-          <WifiOff className="h-3 w-3 mr-1" />
-          离线
-        </Badge>
-      )
+  const getStatusIcon = (status: TestResult["status"]) => {
+    switch (status) {
+      case "success":
+        return <CheckCircle className="w-5 h-5 text-green-500" />
+      case "error":
+        return <XCircle className="w-5 h-5 text-red-500" />
+      case "running":
+        return <RefreshCw className="w-5 h-5 text-blue-500 animate-spin" />
+      default:
+        return <AlertCircle className="w-5 h-5 text-gray-400" />
     }
-
-    return (
-      <Badge className="bg-green-100 text-green-800">
-        <Wifi className="h-3 w-3 mr-1" />
-        在线
-      </Badge>
-    )
   }
 
-  const getInstallStatus = () => {
-    if (isInstalled) {
-      return (
-        <Badge className="bg-blue-100 text-blue-800">
-          <CheckCircle className="h-3 w-3 mr-1" />
-          已安装
-        </Badge>
-      )
+  const getStatusBadge = (status: TestResult["status"]) => {
+    const variants = {
+      success: "default",
+      error: "destructive",
+      running: "secondary",
+      pending: "outline",
+    } as const
+
+    const labels = {
+      success: "通过",
+      error: "失败",
+      running: "运行中",
+      pending: "待测试",
     }
 
-    if (isInstallable) {
-      return (
-        <Badge className="bg-yellow-100 text-yellow-800">
-          <Download className="h-3 w-3 mr-1" />
-          可安装
-        </Badge>
-      )
-    }
-
-    return (
-      <Badge variant="outline">
-        <XCircle className="h-3 w-3 mr-1" />
-        不可安装
-      </Badge>
-    )
+    return <Badge variant={variants[status]}>{labels[status]}</Badge>
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <NetworkStatus />
-
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 p-4">
       <div className="max-w-4xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">PWA功能测试</h1>
-          <p className="text-gray-600">测试Progressive Web App的各项功能和兼容性</p>
+        {/* 页面标题 */}
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">PWA功能测试中心</h1>
+          <p className="text-gray-600 dark:text-gray-300">全面测试Progressive Web App的各项功能和性能</p>
         </div>
 
-        {/* 设备信息 */}
+        {/* 网络状态指示器 */}
+        <Alert className={`mb-6 ${isOnline ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}`}>
+          <div className="flex items-center">
+            {isOnline ? <Wifi className="w-4 h-4 text-green-600" /> : <WifiOff className="w-4 h-4 text-red-600" />}
+            <AlertDescription className={`ml-2 ${isOnline ? "text-green-800" : "text-red-800"}`}>
+              当前网络状态: {isOnline ? "在线" : "离线"}
+              {!isOnline && " - 正在使用离线模式"}
+            </AlertDescription>
+          </div>
+        </Alert>
+
+        {/* 测试控制面板 */}
         <Card className="mb-6">
           <CardHeader>
             <CardTitle className="flex items-center">
-              <Smartphone className="h-5 w-5 mr-2" />
-              设备信息
+              <Shield className="w-5 h-5 mr-2" />
+              测试控制面板
             </CardTitle>
+            <CardDescription>运行全面的PWA功能测试，检查应用的各项能力</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                <span className="text-sm font-medium">运行模式</span>
-                {isStandalone ? (
-                  <Badge className="bg-blue-100 text-blue-800">
-                    <Monitor className="h-3 w-3 mr-1" />
-                    独立应用
-                  </Badge>
-                ) : (
-                  <Badge variant="outline">
-                    <Monitor className="h-3 w-3 mr-1" />
-                    浏览器
-                  </Badge>
-                )}
-              </div>
+            <div className="flex flex-wrap gap-4 mb-4">
+              <Button onClick={runAllTests} disabled={currentTest !== -1}>
+                {currentTest !== -1 ? "测试进行中..." : "开始全面测试"}
+              </Button>
 
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                <span className="text-sm font-medium">网络状态</span>
-                {getNetworkStatus()}
-              </div>
-
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                <span className="text-sm font-medium">安装状态</span>
-                {getInstallStatus()}
-              </div>
-
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                <span className="text-sm font-medium">用户代理</span>
-                <Badge variant="outline" className="text-xs">
-                  {typeof window !== "undefined" && navigator.userAgent.includes("Mobile") ? "移动设备" : "桌面设备"}
-                </Badge>
-              </div>
-            </div>
-
-            {networkInfo && (
-              <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-                <h4 className="font-medium text-blue-900 mb-2">网络详情</h4>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
-                  <div>
-                    <span className="text-blue-700">类型:</span>
-                    <span className="ml-1 font-medium">{networkInfo.type}</span>
-                  </div>
-                  <div>
-                    <span className="text-blue-700">有效类型:</span>
-                    <span className="ml-1 font-medium">{networkInfo.effectiveType}</span>
-                  </div>
-                  <div>
-                    <span className="text-blue-700">下行速度:</span>
-                    <span className="ml-1 font-medium">{networkInfo.downlink} Mbps</span>
-                  </div>
-                  <div>
-                    <span className="text-blue-700">RTT:</span>
-                    <span className="ml-1 font-medium">{networkInfo.rtt} ms</span>
-                  </div>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* PWA功能检测 */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>PWA功能检测</CardTitle>
-            <CardDescription>检测浏览器对PWA各项功能的支持情况</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-3 border rounded-lg">
-                <div>
-                  <h4 className="font-medium">Service Worker</h4>
-                  <p className="text-sm text-gray-600">离线缓存和后台同步</p>
-                </div>
-                {getFeatureStatus(testResults.serviceWorker)}
-              </div>
-
-              <div className="flex items-center justify-between p-3 border rounded-lg">
-                <div>
-                  <h4 className="font-medium">Web App Manifest</h4>
-                  <p className="text-sm text-gray-600">应用元数据和图标</p>
-                </div>
-                {getFeatureStatus(testResults.manifest)}
-              </div>
-
-              <div className="flex items-center justify-between p-3 border rounded-lg">
-                <div>
-                  <h4 className="font-medium">应用图标</h4>
-                  <p className="text-sm text-gray-600">主屏幕图标支持</p>
-                </div>
-                {getFeatureStatus(testResults.icons)}
-              </div>
-
-              <div className="flex items-center justify-between p-3 border rounded-lg">
-                <div>
-                  <h4 className="font-medium">安装提示</h4>
-                  <p className="text-sm text-gray-600">浏览器安装提示</p>
-                </div>
-                {getFeatureStatus(isInstallable)}
-              </div>
-
-              <div className="flex items-center justify-between p-3 border rounded-lg">
-                <div>
-                  <h4 className="font-medium">推送通知</h4>
-                  <p className="text-sm text-gray-600">系统通知支持</p>
-                </div>
-                {getFeatureStatus(typeof window !== "undefined" && "Notification" in window)}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* 功能测试 */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-          {/* 安装测试 */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <Download className="h-5 w-5 mr-2" />
-                应用安装
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {isInstalled ? (
-                <Alert>
-                  <CheckCircle className="h-4 w-4" />
-                  <AlertDescription>应用已安装到设备上</AlertDescription>
-                </Alert>
-              ) : isInstallable ? (
-                <div>
-                  <p className="text-sm text-gray-600 mb-3">您的浏览器支持安装此应用到主屏幕</p>
-                  <Button onClick={handleInstallApp} className="w-full">
-                    <Download className="h-4 w-4 mr-2" />
-                    安装应用
-                  </Button>
-                </div>
-              ) : (
-                <Alert>
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>当前环境不支持应用安装</AlertDescription>
-                </Alert>
+              {installPrompt && !isInstalled && (
+                <Button onClick={installApp} variant="outline">
+                  <Download className="w-4 h-4 mr-2" />
+                  安装应用
+                </Button>
               )}
 
-              {updateAvailable && (
-                <div className="mt-4">
-                  <Alert>
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>有新版本可用</AlertDescription>
-                  </Alert>
-                  <Button onClick={handleUpdateApp} variant="outline" className="w-full mt-2 bg-transparent">
-                    <Sync className="h-4 w-4 mr-2" />
-                    更新应用
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* 通知测试 */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <Bell className="h-5 w-5 mr-2" />
-                推送通知
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">通知权限</span>
-                <Badge
-                  variant={
-                    notifications === "granted" ? "default" : notifications === "denied" ? "destructive" : "secondary"
-                  }
-                >
-                  {notifications === "granted" ? "已授权" : notifications === "denied" ? "已拒绝" : "未设置"}
-                </Badge>
-              </div>
-
-              {notifications === "default" && (
-                <Button onClick={requestNotificationPermission} className="w-full">
-                  <Bell className="h-4 w-4 mr-2" />
+              {testResults[4]?.status === "pending" && (
+                <Button onClick={requestNotificationPermission} variant="outline">
+                  <Bell className="w-4 h-4 mr-2" />
                   请求通知权限
                 </Button>
               )}
 
-              {notifications === "granted" && (
-                <Button
-                  onClick={() =>
-                    PWAManager.showNotification("测试通知", {
-                      body: "这是一条测试通知消息",
-                      icon: "/icon-192.png",
-                    })
-                  }
-                  variant="outline"
-                  className="w-full"
-                >
-                  发送测试通知
-                </Button>
-              )}
-
-              {notifications === "denied" && (
-                <Alert>
-                  <XCircle className="h-4 w-4" />
-                  <AlertDescription>通知权限已被拒绝，请在浏览器设置中手动启用</AlertDescription>
-                </Alert>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* 离线功能测试 */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <WifiOff className="h-5 w-5 mr-2" />
-              离线功能测试
-            </CardTitle>
-            <CardDescription>测试应用在离线状态下的功能可用性</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">当前网络状态</span>
-              {getNetworkStatus()}
+              <Button onClick={clearAllCaches} variant="outline">
+                <Database className="w-4 h-4 mr-2" />
+                清理缓存
+              </Button>
             </div>
 
-            <Button
-              onClick={testOfflineMode}
-              disabled={isTestingOffline}
-              variant="outline"
-              className="w-full bg-transparent"
-            >
-              {isTestingOffline ? (
-                <>
-                  <Sync className="h-4 w-4 mr-2 animate-spin" />
-                  测试中...
-                </>
-              ) : (
-                <>
-                  <WifiOff className="h-4 w-4 mr-2" />
-                  测试离线模式
-                </>
-              )}
-            </Button>
-
-            {offlineTestResult && (
-              <div className="p-3 bg-gray-50 rounded-lg">
-                <h4 className="font-medium mb-2">测试结果:</h4>
-                <pre className="text-sm whitespace-pre-wrap">{offlineTestResult}</pre>
+            {currentTest !== -1 && (
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span>测试进度</span>
+                  <span>{Math.round(overallProgress)}%</span>
+                </div>
+                <Progress value={overallProgress} className="w-full" />
               </div>
             )}
-
-            <Alert>
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                要完整测试离线功能，请在浏览器开发者工具中启用离线模式，然后刷新页面查看缓存内容是否正常加载。
-              </AlertDescription>
-            </Alert>
           </CardContent>
         </Card>
 
-        {/* 移动设备特定功能 */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <Smartphone className="h-5 w-5 mr-2" />
-              移动设备功能
-            </CardTitle>
-            <CardDescription>移动设备专用功能测试</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="p-3 border rounded-lg">
-                <h4 className="font-medium mb-2">触摸支持</h4>
-                <Badge variant={typeof window !== "undefined" && "ontouchstart" in window ? "default" : "secondary"}>
-                  {typeof window !== "undefined" && "ontouchstart" in window ? "支持" : "不支持"}
-                </Badge>
-              </div>
+        {/* 测试结果列表 */}
+        <div className="grid gap-4 md:grid-cols-2">
+          {testResults.map((test, index) => (
+            <Card key={index} className={`${currentTest === index ? "ring-2 ring-blue-500" : ""}`}>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg flex items-center">
+                    {getStatusIcon(test.status)}
+                    <span className="ml-2">{test.name}</span>
+                  </CardTitle>
+                  {getStatusBadge(test.status)}
+                </div>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-gray-600 dark:text-gray-300 mb-2">{test.message}</p>
+                {test.details && (
+                  <pre className="text-xs bg-gray-100 dark:bg-gray-800 p-2 rounded whitespace-pre-wrap">
+                    {test.details}
+                  </pre>
+                )}
 
-              <div className="p-3 border rounded-lg">
-                <h4 className="font-medium mb-2">设备方向</h4>
-                <Badge variant={typeof window !== "undefined" && "orientation" in screen ? "default" : "secondary"}>
-                  {typeof window !== "undefined" && "orientation" in screen ? "支持" : "不支持"}
-                </Badge>
-              </div>
+                {/* 特殊操作按钮 */}
+                {index === 3 && installPrompt && !isInstalled && (
+                  <Button size="sm" onClick={installApp} className="mt-2">
+                    <Smartphone className="w-4 h-4 mr-1" />
+                    立即安装
+                  </Button>
+                )}
 
-              <div className="p-3 border rounded-lg">
-                <h4 className="font-medium mb-2">振动API</h4>
-                <Badge variant={typeof window !== "undefined" && "vibrate" in navigator ? "default" : "secondary"}>
-                  {typeof window !== "undefined" && "vibrate" in navigator ? "支持" : "不支持"}
-                </Badge>
-                {typeof window !== "undefined" && "vibrate" in navigator && (
+                {index === 4 && test.status === "pending" && (
+                  <Button size="sm" onClick={requestNotificationPermission} className="mt-2">
+                    <Bell className="w-4 h-4 mr-1" />
+                    授权通知
+                  </Button>
+                )}
+
+                {index === 6 && test.status === "success" && (
                   <Button
                     size="sm"
                     variant="outline"
-                    className="ml-2 bg-transparent"
-                    onClick={() => navigator.vibrate(200)}
+                    className="mt-2 bg-transparent"
+                    onClick={async () => {
+                      try {
+                        const response = await fetch("/api/sync", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            type: "test_sync",
+                            data: { test: true, timestamp: Date.now() },
+                            deviceId: "pwa-test",
+                          }),
+                        })
+
+                        if (response.ok) {
+                          updateTestResult(6, "success", "后台同步测试成功", "数据同步完成")
+                        }
+                      } catch (error) {
+                        updateTestResult(6, "error", "后台同步测试失败")
+                      }
+                    }}
                   >
-                    测试振动
+                    <Sync className="w-4 h-4 mr-1" />
+                    测试同步
                   </Button>
                 )}
-              </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
 
-              <div className="p-3 border rounded-lg">
-                <h4 className="font-medium mb-2">电池API</h4>
-                <Badge variant={typeof window !== "undefined" && "getBattery" in navigator ? "default" : "secondary"}>
-                  {typeof window !== "undefined" && "getBattery" in navigator ? "支持" : "不支持"}
-                </Badge>
+        {/* 测试统计 */}
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle>测试统计</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+              <div>
+                <div className="text-2xl font-bold text-green-600">
+                  {testResults.filter((t) => t.status === "success").length}
+                </div>
+                <div className="text-sm text-gray-600">通过</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-red-600">
+                  {testResults.filter((t) => t.status === "error").length}
+                </div>
+                <div className="text-sm text-gray-600">失败</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-blue-600">
+                  {testResults.filter((t) => t.status === "running").length}
+                </div>
+                <div className="text-sm text-gray-600">运行中</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-gray-600">
+                  {testResults.filter((t) => t.status === "pending").length}
+                </div>
+                <div className="text-sm text-gray-600">待测试</div>
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
-
-      {/* PWA安装按钮 */}
-      <PWAInstallButton />
     </div>
   )
 }

@@ -1,9 +1,5 @@
 "use client"
 
-import jwt from "jsonwebtoken"
-import bcrypt from "bcryptjs"
-import { cookies } from "next/headers"
-
 // 用户角色定义
 export type UserRole = "admin" | "premium" | "user" | "guest"
 
@@ -126,7 +122,7 @@ const ROLE_PERMISSIONS: Record<UserRole, UserPermissions> = {
 
 // 认证管理类
 export class AuthManager {
-  private static readonly JWT_SECRET = process.env.JWT_SECRET || "your-secret-key"
+  private static readonly JWT_SECRET = "your-secret-key"
   private static readonly JWT_EXPIRES_IN = "7d"
   private static readonly REFRESH_TOKEN_EXPIRES_IN = "30d"
 
@@ -179,7 +175,8 @@ export class AuthManager {
       exp: Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60, // 7天
     }
 
-    return jwt.sign(payload, this.JWT_SECRET)
+    // 简化的JWT生成（实际项目中应使用真正的JWT库）
+    return btoa(JSON.stringify(payload))
   }
 
   // 生成刷新令牌
@@ -194,7 +191,10 @@ export class AuthManager {
   // 验证JWT令牌
   static verifyToken(token: string): JWTPayload | null {
     try {
-      const payload = jwt.verify(token, this.JWT_SECRET) as JWTPayload
+      const payload = JSON.parse(atob(token)) as JWTPayload
+      if (payload.exp < Math.floor(Date.now() / 1000)) {
+        return null // 令牌已过期
+      }
       return payload
     } catch (error) {
       console.error("JWT验证失败:", error)
@@ -253,7 +253,6 @@ export class AuthManager {
 
       // 创建新用户
       const userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-      const hashedPassword = await bcrypt.hash(data.password, 12)
 
       const newUser: User = {
         id: userId,
@@ -375,7 +374,7 @@ export class AuthManager {
           refreshToken,
         }
       } else {
-        // 未绑定用户，创建新用户或需要绑定
+        // 未绑定用户，创建新用户
         const userId = `wechat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 
         const newUser: User = {
@@ -463,12 +462,10 @@ export class AuthManager {
     return { success: true }
   }
 
-  // 获取当前用户
-  static async getCurrentUser(): Promise<User | null> {
+  // 获取当前用户（客户端版本）
+  static getCurrentUser(): User | null {
     try {
-      const cookieStore = cookies()
-      const token = cookieStore.get("auth-token")?.value
-
+      const token = localStorage.getItem("auth-token")
       if (!token) {
         return null
       }
@@ -556,6 +553,8 @@ export class AuthManager {
     if (refreshToken) {
       this.refreshTokens.delete(refreshToken)
     }
+    localStorage.removeItem("auth-token")
+    localStorage.removeItem("refresh-token")
   }
 
   // 重置密码
@@ -613,40 +612,23 @@ export class AuthManager {
   }
 }
 
-// 权限检查中间件
-export function requireAuth(requiredRole?: UserRole) {
-  return async (request: Request) => {
-    const user = await AuthManager.getCurrentUser()
-
-    if (!user) {
-      return new Response(JSON.stringify({ error: "未登录" }), {
-        status: 401,
-        headers: { "Content-Type": "application/json" },
-      })
-    }
-
-    if (requiredRole && !AuthManager.hasRole(user, requiredRole)) {
-      return new Response(JSON.stringify({ error: "权限不足" }), {
-        status: 403,
-        headers: { "Content-Type": "application/json" },
-      })
-    }
-
-    return null // 通过验证
-  }
-}
-
 // 权限检查Hook
 export function useAuth() {
   // 这里应该使用React Context或状态管理
   // 简化实现，实际项目中需要完整的客户端状态管理
   return {
-    user: null as User | null,
+    user: AuthManager.getCurrentUser(),
     isLoading: false,
     login: AuthManager.login,
     register: AuthManager.register,
     logout: AuthManager.logout,
-    hasPermission: (permission: keyof UserPermissions) => false,
-    hasRole: (role: UserRole) => false,
+    hasPermission: (permission: keyof UserPermissions) => {
+      const user = AuthManager.getCurrentUser()
+      return user ? AuthManager.hasPermission(user, permission) : false
+    },
+    hasRole: (role: UserRole) => {
+      const user = AuthManager.getCurrentUser()
+      return user ? AuthManager.hasRole(user, role) : false
+    },
   }
 }

@@ -23,12 +23,31 @@ export class PWAManager {
 
   static async registerServiceWorker(): Promise<ServiceWorkerRegistration | null> {
     if (typeof window === "undefined" || !("serviceWorker" in navigator)) {
+      console.log("Service Worker 不支持")
       return null
     }
 
     try {
-      const registration = await navigator.serviceWorker.register("/sw.js")
+      // 使用API路由提供的Service Worker
+      const registration = await navigator.serviceWorker.register("/api/sw", {
+        scope: "/",
+      })
+
       console.log("Service Worker 注册成功:", registration)
+
+      // 监听更新
+      registration.addEventListener("updatefound", () => {
+        const newWorker = registration.installing
+        if (newWorker) {
+          newWorker.addEventListener("statechange", () => {
+            if (newWorker.state === "installed" && navigator.serviceWorker.controller) {
+              console.log("Service Worker 更新可用")
+              // 可以在这里通知用户有更新
+            }
+          })
+        }
+      })
+
       return registration
     } catch (error) {
       console.error("Service Worker 注册失败:", error)
@@ -209,6 +228,9 @@ export function usePWA() {
       }
 
       window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt)
+
+      // 自动注册Service Worker
+      PWAManager.registerServiceWorker()
 
       return () => {
         window.removeEventListener("online", handleOnline)

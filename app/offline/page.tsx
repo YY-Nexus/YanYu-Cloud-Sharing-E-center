@@ -18,7 +18,12 @@ import {
   AlertCircle,
   Clock,
   Database,
+  RefreshCw,
+  Home,
+  History,
 } from "lucide-react"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
 
 interface OfflineNote {
   id: string
@@ -46,6 +51,17 @@ export default function OfflinePage() {
     syncInProgress: false,
   })
   const [isLoading, setIsLoading] = useState(true)
+  const router = useRouter()
+
+  const handleRefresh = () => {
+    if (typeof window !== "undefined") {
+      window.location.reload()
+    }
+  }
+
+  const handleRetry = () => {
+    router.back()
+  }
 
   // 初始化离线数据
   useEffect(() => {
@@ -488,71 +504,52 @@ export default function OfflinePage() {
 
         {/* 离线功能说明 */}
         <Card className="mt-6">
-          <CardHeader>
-            <CardTitle>离线功能说明</CardTitle>
+          <CardHeader className="text-center">
+            <div className="mx-auto mb-4 p-3 bg-red-100 rounded-full w-fit">
+              <WifiOff className="h-8 w-8 text-red-600" />
+            </div>
+            <CardTitle className="text-xl">您当前处于离线状态</CardTitle>
+            <CardDescription>网络连接不可用，但您仍可以访问已缓存的内容</CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <h4 className="font-medium text-gray-900 mb-3">功能特性</h4>
-                <ul className="space-y-2 text-sm text-gray-600">
-                  <li className="flex items-center">
-                    <CheckCircle className="h-4 w-4 text-green-600 mr-2" />
-                    离线数据创建和存储
-                  </li>
-                  <li className="flex items-center">
-                    <CheckCircle className="h-4 w-4 text-green-600 mr-2" />
-                    网络恢复后自动同步
-                  </li>
-                  <li className="flex items-center">
-                    <CheckCircle className="h-4 w-4 text-green-600 mr-2" />
-                    实时网络状态监控
-                  </li>
-                  <li className="flex items-center">
-                    <CheckCircle className="h-4 w-4 text-green-600 mr-2" />
-                    本地数据持久化存储
-                  </li>
-                  <li className="flex items-center">
-                    <CheckCircle className="h-4 w-4 text-green-600 mr-2" />
-                    同步状态可视化
-                  </li>
-                </ul>
-              </div>
-              <div>
-                <h4 className="font-medium text-gray-900 mb-3">测试步骤</h4>
-                <ol className="space-y-2 text-sm text-gray-600">
-                  <li className="flex">
-                    <span className="bg-blue-100 text-blue-800 rounded-full w-5 h-5 flex items-center justify-center text-xs font-medium mr-2 mt-0.5">
-                      1
-                    </span>
-                    在线状态下创建几条笔记
-                  </li>
-                  <li className="flex">
-                    <span className="bg-blue-100 text-blue-800 rounded-full w-5 h-5 flex items-center justify-center text-xs font-medium mr-2 mt-0.5">
-                      2
-                    </span>
-                    断开网络连接（开发者工具或关闭WiFi）
-                  </li>
-                  <li className="flex">
-                    <span className="bg-blue-100 text-blue-800 rounded-full w-5 h-5 flex items-center justify-center text-xs font-medium mr-2 mt-0.5">
-                      3
-                    </span>
-                    在离线状态下继续创建笔记
-                  </li>
-                  <li className="flex">
-                    <span className="bg-blue-100 text-blue-800 rounded-full w-5 h-5 flex items-center justify-center text-xs font-medium mr-2 mt-0.5">
-                      4
-                    </span>
-                    恢复网络连接观察自动同步
-                  </li>
-                  <li className="flex">
-                    <span className="bg-blue-100 text-blue-800 rounded-full w-5 h-5 flex items-center justify-center text-xs font-medium mr-2 mt-0.5">
-                      5
-                    </span>
-                    刷新页面验证数据持久化
-                  </li>
-                </ol>
-              </div>
+          <CardContent className="space-y-4">
+            <div className="text-center text-sm text-gray-600">
+              <p>当网络恢复时，应用将自动同步最新数据</p>
+            </div>
+
+            <div className="space-y-2">
+              <Button onClick={handleRefresh} className="w-full bg-transparent" variant="outline">
+                <RefreshCw className="h-4 w-4 mr-2" />
+                重新加载
+              </Button>
+
+              <Button onClick={handleRetry} className="w-full bg-transparent" variant="outline">
+                <RefreshCw className="h-4 w-4 mr-2" />
+                重试上一页
+              </Button>
+
+              <Link href="/" className="block">
+                <Button className="w-full">
+                  <Home className="h-4 w-4 mr-2" />
+                  返回首页
+                </Button>
+              </Link>
+
+              <Link href="/history" className="block">
+                <Button variant="outline" className="w-full bg-transparent">
+                  <History className="h-4 w-4 mr-2" />
+                  查看历史记录
+                </Button>
+              </Link>
+            </div>
+
+            <div className="mt-6 p-3 bg-blue-50 rounded-lg">
+              <h4 className="font-medium text-blue-900 mb-2">离线功能</h4>
+              <ul className="text-sm text-blue-800 space-y-1">
+                <li>• 查看搜索历史</li>
+                <li>• 访问已缓存的页面</li>
+                <li>• 使用基本功能</li>
+                <li>• 数据将在联网后同步</li>
+              </ul>
             </div>
           </CardContent>
         </Card>
