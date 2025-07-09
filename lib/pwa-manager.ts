@@ -28,8 +28,8 @@ export class PWAManager {
     }
 
     try {
-      // 使用API路由提供的Service Worker
-      const registration = await navigator.serviceWorker.register("/api/sw", {
+      // 使用重写后的路径
+      const registration = await navigator.serviceWorker.register("/sw.js", {
         scope: "/",
       })
 

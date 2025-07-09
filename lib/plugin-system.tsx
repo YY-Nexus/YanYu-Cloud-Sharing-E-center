@@ -2,6 +2,33 @@
 
 import type React from "react"
 import { useState, useEffect } from "react"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Switch } from "@/components/ui/switch"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import {
+  Settings,
+  Download,
+  Trash2,
+  Pause,
+  RefreshCw,
+  Package,
+  AlertCircle,
+  CheckCircle,
+  Clock,
+  Star,
+  Users,
+  Activity,
+  Search,
+  Filter,
+} from "lucide-react"
 
 // 插件系统架构
 export interface Plugin {
@@ -18,6 +45,13 @@ export interface Plugin {
   hooks: PluginHooks
   components?: PluginComponents
   api?: PluginAPI
+  installed?: boolean
+  size?: string
+  rating?: number
+  downloads?: number
+  lastUpdated?: string
+  status?: "active" | "inactive" | "error" | "updating"
+  icon?: string
 }
 
 export type PluginCategory =
@@ -81,10 +115,114 @@ export interface PluginManifest {
   }
 }
 
+// 插件类别
+export const PLUGIN_CATEGORIES = [
+  { id: "ai-enhancement", name: "AI增强", icon: "🤖" },
+  { id: "data-processing", name: "数据处理", icon: "📊" },
+  { id: "ui-extension", name: "界面扩展", icon: "🎨" },
+  { id: "integration", name: "集成工具", icon: "🔗" },
+  { id: "analytics", name: "分析工具", icon: "📈" },
+  { id: "security", name: "安全工具", icon: "🔒" },
+]
+
+// 模拟插件数据
+const MOCK_PLUGINS: Plugin[] = [
+  {
+    id: "ai-chat-enhancer",
+    name: "AI对话增强器",
+    version: "2.1.0",
+    description: "增强AI对话功能，支持上下文记忆、情感分析和个性化回复",
+    author: "AI团队",
+    category: "ai-enhancement",
+    permissions: ["read-user-data", "access-ai-api"],
+    dependencies: [],
+    isEnabled: true,
+    installed: true,
+    size: "2.3MB",
+    rating: 4.8,
+    downloads: 15420,
+    lastUpdated: "2024-01-15",
+    status: "active",
+    config: {
+      maxContextLength: 4000,
+      enableEmotionAnalysis: true,
+      personalityMode: "friendly",
+    },
+    hooks: {},
+  },
+  {
+    id: "smart-search",
+    name: "智能搜索优化",
+    version: "1.5.2",
+    description: "优化搜索算法，提供更精准的搜索结果和智能推荐",
+    author: "搜索团队",
+    category: "data-processing",
+    permissions: ["read-user-data"],
+    dependencies: [],
+    isEnabled: false,
+    installed: true,
+    size: "1.8MB",
+    rating: 4.6,
+    downloads: 8930,
+    lastUpdated: "2024-01-10",
+    status: "inactive",
+    config: {},
+    hooks: {},
+  },
+  {
+    id: "theme-customizer",
+    name: "主题定制器",
+    version: "3.0.1",
+    description: "提供丰富的主题定制选项，支持深色模式、颜色调整和布局优化",
+    author: "UI团队",
+    category: "ui-extension",
+    permissions: ["modify-ui"],
+    dependencies: [],
+    isEnabled: true,
+    installed: true,
+    size: "950KB",
+    rating: 4.9,
+    downloads: 23150,
+    lastUpdated: "2024-01-12",
+    status: "active",
+    config: {},
+    hooks: {},
+  },
+  {
+    id: "data-visualizer",
+    name: "数据可视化工具",
+    version: "2.3.4",
+    description: "强大的数据可视化插件，支持多种图表类型和交互式展示",
+    author: "数据团队",
+    category: "analytics",
+    permissions: ["read-user-data"],
+    dependencies: [],
+    isEnabled: false,
+    installed: false,
+    size: "3.2MB",
+    rating: 4.7,
+    downloads: 12680,
+    lastUpdated: "2024-01-08",
+    status: "inactive",
+    config: {},
+    hooks: {},
+  },
+]
+
 export class PluginManager {
   private static plugins: Map<string, Plugin> = new Map()
   private static enabledPlugins: Set<string> = new Set()
   private static pluginConfigs: Map<string, Record<string, any>> = new Map()
+
+  static {
+    // 初始化插件数据
+    MOCK_PLUGINS.forEach((plugin) => {
+      this.plugins.set(plugin.id, plugin)
+      if (plugin.isEnabled) {
+        this.enabledPlugins.add(plugin.id)
+      }
+    })
+  }
 
   // 注册插件
   static registerPlugin(plugin: Plugin): boolean {
@@ -130,6 +268,7 @@ export class PluginManager {
 
       // 启用插件
       plugin.isEnabled = true
+      plugin.status = "active"
       this.enabledPlugins.add(pluginId)
 
       // 执行启用钩子
@@ -160,6 +299,7 @@ export class PluginManager {
 
       // 禁用插件
       plugin.isEnabled = false
+      plugin.status = "inactive"
       this.enabledPlugins.delete(pluginId)
 
       // 执行禁用钩子
@@ -289,6 +429,36 @@ export class PluginManager {
     return this.pluginConfigs.get(pluginId) || null
   }
 
+  // 安装插件
+  static async installPlugin(pluginId: string): Promise<boolean> {
+    try {
+      const plugin = this.plugins.get(pluginId)
+      if (!plugin) return false
+
+      plugin.status = "updating"
+      await new Promise((resolve) => setTimeout(resolve, 2000))
+
+      plugin.installed = true
+      plugin.status = "inactive"
+      return true
+    } catch (error) {
+      const plugin = this.plugins.get(pluginId)
+      if (plugin) plugin.status = "error"
+      return false
+    }
+  }
+
+  // 搜索插件
+  static searchPlugins(query: string): Plugin[] {
+    const lowercaseQuery = query.toLowerCase()
+    return this.getAllPlugins().filter(
+      (plugin) =>
+        plugin.name.toLowerCase().includes(lowercaseQuery) ||
+        plugin.description.toLowerCase().includes(lowercaseQuery) ||
+        plugin.author.toLowerCase().includes(lowercaseQuery),
+    )
+  }
+
   // 私有方法
   private static validatePlugin(plugin: Plugin): boolean {
     // 基本字段验证
@@ -357,6 +527,8 @@ export function PluginManagerUI() {
   const [loading, setLoading] = useState(true)
   const [selectedPlugin, setSelectedPlugin] = useState<Plugin | null>(null)
   const [showConfigModal, setShowConfigModal] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [selectedCategory, setSelectedCategory] = useState<string>("all")
 
   useEffect(() => {
     // 加载插件列表
@@ -377,21 +549,28 @@ export function PluginManagerUI() {
 
   const handleEnablePlugin = async (pluginId: string) => {
     try {
-      await PluginManager.enablePlugin(pluginId)
+      const plugin = plugins.find((p) => p.id === pluginId)
+      if (!plugin) return
+
+      if (plugin.isEnabled) {
+        await PluginManager.disablePlugin(pluginId)
+      } else {
+        await PluginManager.enablePlugin(pluginId)
+      }
       loadPlugins()
     } catch (error) {
-      console.error("启用插件失败:", error)
-      alert("启用插件失败: " + (error instanceof Error ? error.message : String(error)))
+      console.error("切换插件状态失败:", error)
+      alert("操作失败: " + (error instanceof Error ? error.message : String(error)))
     }
   }
 
-  const handleDisablePlugin = async (pluginId: string) => {
+  const handleInstallPlugin = async (pluginId: string) => {
     try {
-      await PluginManager.disablePlugin(pluginId)
+      await PluginManager.installPlugin(pluginId)
       loadPlugins()
     } catch (error) {
-      console.error("禁用插件失败:", error)
-      alert("禁用插件失败: " + (error instanceof Error ? error.message : String(error)))
+      console.error("安装插件失败:", error)
+      alert("安装失败: " + (error instanceof Error ? error.message : String(error)))
     }
   }
 
@@ -405,7 +584,7 @@ export function PluginManagerUI() {
       loadPlugins()
     } catch (error) {
       console.error("卸载插件失败:", error)
-      alert("卸载插件失败: " + (error instanceof Error ? error.message : String(error)))
+      alert("卸载失败: " + (error instanceof Error ? error.message : String(error)))
     }
   }
 
@@ -427,6 +606,27 @@ export function PluginManagerUI() {
     }
   }
 
+  // 过滤插件
+  const filteredPlugins = plugins.filter((plugin) => {
+    const matchesSearch =
+      searchQuery === "" ||
+      plugin.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      plugin.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      plugin.author.toLowerCase().includes(searchQuery.toLowerCase())
+
+    const matchesCategory = selectedCategory === "all" || plugin.category === selectedCategory
+
+    return matchesSearch && matchesCategory
+  })
+
+  // 统计数据
+  const stats = {
+    total: plugins.length,
+    installed: plugins.filter((p) => p.installed).length,
+    enabled: plugins.filter((p) => p.isEnabled).length,
+    updating: plugins.filter((p) => p.status === "updating").length,
+  }
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -436,154 +636,401 @@ export function PluginManagerUI() {
   }
 
   return (
-    <div className="plugin-manager p-6">
-      <h2 className="text-2xl font-bold mb-6">插件管理</h2>
+    <div className="plugin-manager p-6 max-w-7xl mx-auto">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold mb-2">插件管理中心</h1>
+        <p className="text-gray-600">管理和配置您的应用插件，扩展功能体验</p>
+      </div>
 
-      {plugins.length === 0 ? (
-        <div className="text-center py-8 bg-gray-50 rounded-lg">
-          <p className="text-gray-500">暂无已安装的插件</p>
-          <button className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">浏览插件市场</button>
+      {/* 统计卡片 */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2">
+              <Package className="w-5 h-5 text-blue-600" />
+              <div>
+                <p className="text-2xl font-bold">{stats.total}</p>
+                <p className="text-sm text-gray-600">总插件数</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2">
+              <Download className="w-5 h-5 text-green-600" />
+              <div>
+                <p className="text-2xl font-bold">{stats.installed}</p>
+                <p className="text-sm text-gray-600">已安装</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2">
+              <Activity className="w-5 h-5 text-purple-600" />
+              <div>
+                <p className="text-2xl font-bold">{stats.enabled}</p>
+                <p className="text-sm text-gray-600">运行中</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2">
+              <RefreshCw className="w-5 h-5 text-orange-600" />
+              <div>
+                <p className="text-2xl font-bold">{stats.updating}</p>
+                <p className="text-sm text-gray-600">更新中</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* 搜索和过滤 */}
+      <div className="flex flex-col md:flex-row gap-4 mb-6">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+          <Input
+            placeholder="搜索插件..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <div className="flex items-center space-x-2">
+          <Filter className="w-4 h-4 text-gray-400" />
+          <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+            <SelectTrigger className="w-48">
+              <SelectValue placeholder="选择分类" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">所有分类</SelectItem>
+              {PLUGIN_CATEGORIES.map((category) => (
+                <SelectItem key={category.id} value={category.id}>
+                  {category.icon} {category.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* 插件列表 */}
+      {filteredPlugins.length === 0 ? (
+        <div className="text-center py-12 bg-gray-50 rounded-lg">
+          <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+          <p className="text-gray-500 mb-4">
+            {searchQuery || selectedCategory !== "all" ? "未找到匹配的插件" : "暂无已安装的插件"}
+          </p>
+          <Button>浏览插件市场</Button>
         </div>
       ) : (
-        <div className="grid gap-4">
-          {plugins.map((plugin) => (
-            <div key={plugin.id} className="border rounded-lg p-4 bg-white shadow-sm">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h3 className="font-semibold text-lg">{plugin.name}</h3>
-                  <p className="text-gray-600 mt-1">{plugin.description}</p>
-                  <div className="flex items-center mt-2 text-sm text-gray-500">
-                    <span className="mr-3">版本: {plugin.version}</span>
-                    <span>作者: {plugin.author}</span>
-                  </div>
-                  <div className="mt-2">
-                    <span className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
-                      {plugin.category}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex flex-col gap-2">
-                  {plugin.isEnabled ? (
-                    <button
-                      onClick={() => handleDisablePlugin(plugin.id)}
-                      className="px-3 py-1 bg-gray-200 text-gray-800 rounded text-sm hover:bg-gray-300"
-                    >
-                      禁用
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => handleEnablePlugin(plugin.id)}
-                      className="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700"
-                    >
-                      启用
-                    </button>
-                  )}
-                  <button
-                    onClick={() => handleConfigurePlugin(plugin)}
-                    className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
-                  >
-                    配置
-                  </button>
-                  <button
-                    onClick={() => handleUninstallPlugin(plugin.id)}
-                    className="px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700"
-                  >
-                    卸载
-                  </button>
-                </div>
-              </div>
-
-              <div className="mt-3 pt-3 border-t">
-                <h4 className="text-sm font-medium text-gray-700 mb-1">权限</h4>
-                <div className="flex flex-wrap gap-1">
-                  {plugin.permissions.map((permission) => (
-                    <span key={permission} className="inline-block bg-gray-100 text-gray-800 text-xs px-2 py-1 rounded">
-                      {permission}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              {plugin.dependencies.length > 0 && (
-                <div className="mt-3 pt-3 border-t">
-                  <h4 className="text-sm font-medium text-gray-700 mb-1">依赖</h4>
-                  <div className="flex flex-wrap gap-1">
-                    {plugin.dependencies.map((dep) => (
-                      <span key={dep} className="inline-block bg-gray-100 text-gray-800 text-xs px-2 py-1 rounded">
-                        {dep}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {filteredPlugins.map((plugin) => (
+            <PluginCard
+              key={plugin.id}
+              plugin={plugin}
+              onToggle={handleEnablePlugin}
+              onInstall={handleInstallPlugin}
+              onUninstall={handleUninstallPlugin}
+              onConfigure={handleConfigurePlugin}
+            />
           ))}
         </div>
       )}
 
       {/* 配置模态框 */}
-      {showConfigModal && selectedPlugin && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h3 className="text-xl font-semibold mb-4">配置插件: {selectedPlugin.name}</h3>
-            <div className="mb-4">
-              <p className="text-sm text-gray-600 mb-4">调整插件设置以满足您的需求。</p>
-              <div className="space-y-4">
-                {Object.entries(selectedPlugin.config).map(([key, value]) => (
-                  <div key={key}>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{key}</label>
-                    {typeof value === "boolean" ? (
-                      <input
-                        type="checkbox"
-                        checked={value}
-                        onChange={(e) => {
-                          const newConfig = { ...selectedPlugin.config, [key]: e.target.checked }
-                          selectedPlugin.config = newConfig
-                        }}
-                        className="rounded border-gray-300"
-                      />
-                    ) : typeof value === "number" ? (
-                      <input
-                        type="number"
-                        value={value}
-                        onChange={(e) => {
-                          const newConfig = { ...selectedPlugin.config, [key]: Number(e.target.value) }
-                          selectedPlugin.config = newConfig
-                        }}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                      />
-                    ) : (
-                      <input
-                        type="text"
-                        value={value as string}
-                        onChange={(e) => {
-                          const newConfig = { ...selectedPlugin.config, [key]: e.target.value }
-                          selectedPlugin.config = newConfig
-                        }}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                      />
-                    )}
-                  </div>
-                ))}
+      <PluginConfigDialog
+        plugin={selectedPlugin}
+        open={showConfigModal}
+        onOpenChange={setShowConfigModal}
+        onSave={handleSaveConfig}
+      />
+    </div>
+  )
+}
+
+// 插件卡片组件
+export function PluginCard({
+  plugin,
+  onToggle,
+  onInstall,
+  onUninstall,
+  onConfigure,
+}: {
+  plugin: Plugin
+  onToggle: (id: string) => void
+  onInstall: (id: string) => void
+  onUninstall: (id: string) => void
+  onConfigure: (id: string) => void
+}) {
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "active":
+        return "bg-green-100 text-green-800"
+      case "inactive":
+        return "bg-gray-100 text-gray-800"
+      case "error":
+        return "bg-red-100 text-red-800"
+      case "updating":
+        return "bg-blue-100 text-blue-800"
+      default:
+        return "bg-gray-100 text-gray-800"
+    }
+  }
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "active":
+        return <CheckCircle className="w-4 h-4" />
+      case "inactive":
+        return <Pause className="w-4 h-4" />
+      case "error":
+        return <AlertCircle className="w-4 h-4" />
+      case "updating":
+        return <RefreshCw className="w-4 h-4 animate-spin" />
+      default:
+        return <Clock className="w-4 h-4" />
+    }
+  }
+
+  const categoryInfo = PLUGIN_CATEGORIES.find((cat) => cat.id === plugin.category)
+
+  return (
+    <Card className="h-full">
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center text-white font-bold">
+              {plugin.icon || plugin.name.charAt(0)}
+            </div>
+            <div>
+              <CardTitle className="text-lg">{plugin.name}</CardTitle>
+              <div className="flex items-center space-x-2 mt-1">
+                <Badge variant="outline" className="text-xs">
+                  v{plugin.version}
+                </Badge>
+                <Badge className={`text-xs ${getStatusColor(plugin.status || "inactive")}`}>
+                  {getStatusIcon(plugin.status || "inactive")}
+                  <span className="ml-1">
+                    {plugin.status === "active"
+                      ? "运行中"
+                      : plugin.status === "inactive"
+                        ? "已停止"
+                        : plugin.status === "error"
+                          ? "错误"
+                          : "更新中"}
+                  </span>
+                </Badge>
               </div>
             </div>
-            <div className="flex justify-end space-x-3">
-              <button
-                onClick={() => setShowConfigModal(false)}
-                className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
-              >
-                取消
-              </button>
-              <button
-                onClick={() => handleSaveConfig(selectedPlugin.config)}
-                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-              >
-                保存
-              </button>
+          </div>
+          {plugin.installed && (
+            <Switch
+              checked={plugin.isEnabled}
+              onCheckedChange={() => onToggle(plugin.id)}
+              disabled={plugin.status === "updating"}
+            />
+          )}
+        </div>
+      </CardHeader>
+
+      <CardContent className="space-y-4">
+        <CardDescription className="text-sm line-clamp-2">{plugin.description}</CardDescription>
+
+        <div className="flex items-center justify-between text-sm text-gray-600">
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-1">
+              <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+              <span>{plugin.rating || 0}</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <Download className="w-4 h-4" />
+              <span>{(plugin.downloads || 0).toLocaleString()}</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <Users className="w-4 h-4" />
+              <span>{plugin.author}</span>
             </div>
           </div>
+          <span className="text-xs">{plugin.size || "未知"}</span>
         </div>
-      )}
-    </div>
+
+        <div className="flex items-center justify-between">
+          <Badge variant="secondary" className="text-xs">
+            {categoryInfo?.icon} {categoryInfo?.name}
+          </Badge>
+          <span className="text-xs text-gray-500">更新于 {plugin.lastUpdated}</span>
+        </div>
+
+        <div className="flex space-x-2 pt-2">
+          {!plugin.installed ? (
+            <Button size="sm" onClick={() => onInstall(plugin.id)} disabled={plugin.status === "updating"}>
+              <Download className="w-4 h-4 mr-1" />
+              安装
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => onUninstall(plugin.id)}
+              disabled={plugin.status === "updating"}
+            >
+              <Trash2 className="w-4 h-4 mr-1" />
+              卸载
+            </Button>
+          )}
+
+          {plugin.installed && (
+            <Button size="sm" variant="outline" onClick={() => onConfigure(plugin.id)}>
+              <Settings className="w-4 h-4 mr-1" />
+              配置
+            </Button>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+// 插件配置对话框
+export function PluginConfigDialog({
+  plugin,
+  open,
+  onOpenChange,
+  onSave,
+}: {
+  plugin: Plugin | null
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onSave: (config: Record<string, any>) => void
+}) {
+  const [config, setConfig] = useState<Record<string, any>>({})
+
+  useEffect(() => {
+    if (plugin?.config) {
+      setConfig(plugin.config)
+    }
+  }, [plugin])
+
+  if (!plugin) return null
+
+  const handleSave = () => {
+    onSave(config)
+    onOpenChange(false)
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>配置 {plugin.name}</DialogTitle>
+          <DialogDescription>调整插件设置以满足您的需求</DialogDescription>
+        </DialogHeader>
+
+        <Tabs defaultValue="general" className="w-full">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="general">常规设置</TabsTrigger>
+            <TabsTrigger value="permissions">权限管理</TabsTrigger>
+            <TabsTrigger value="advanced">高级选项</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="general" className="space-y-4">
+            <div className="space-y-4">
+              {plugin.id === "ai-chat-enhancer" && (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="maxContextLength">最大上下文长度</Label>
+                    <Input
+                      id="maxContextLength"
+                      type="number"
+                      value={config.maxContextLength || 4000}
+                      onChange={(e) => setConfig({ ...config, maxContextLength: Number.parseInt(e.target.value) })}
+                    />
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      id="enableEmotionAnalysis"
+                      checked={config.enableEmotionAnalysis || false}
+                      onCheckedChange={(checked) => setConfig({ ...config, enableEmotionAnalysis: checked })}
+                    />
+                    <Label htmlFor="enableEmotionAnalysis">启用情感分析</Label>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="personalityMode">个性化模式</Label>
+                    <Select
+                      value={config.personalityMode || "friendly"}
+                      onValueChange={(value) => setConfig({ ...config, personalityMode: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="friendly">友好</SelectItem>
+                        <SelectItem value="professional">专业</SelectItem>
+                        <SelectItem value="casual">随意</SelectItem>
+                        <SelectItem value="formal">正式</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </>
+              )}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="permissions" className="space-y-4">
+            <div className="space-y-3">
+              <h4 className="font-medium">此插件请求以下权限：</h4>
+              {plugin.permissions.map((permission, index) => (
+                <div key={index} className="flex items-center space-x-2">
+                  <CheckCircle className="w-4 h-4 text-green-600" />
+                  <span className="text-sm">{permission}</span>
+                </div>
+              ))}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="advanced" className="space-y-4">
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>高级选项可能影响插件性能，请谨慎修改。</AlertDescription>
+            </Alert>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="debugMode">调试模式</Label>
+                <Switch
+                  id="debugMode"
+                  checked={config.debugMode || false}
+                  onCheckedChange={(checked) => setConfig({ ...config, debugMode: checked })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="customConfig">自定义配置 (JSON)</Label>
+                <Textarea
+                  id="customConfig"
+                  placeholder='{"key": "value"}'
+                  value={config.customConfig || ""}
+                  onChange={(e) => setConfig({ ...config, customConfig: e.target.value })}
+                />
+              </div>
+            </div>
+          </TabsContent>
+        </Tabs>
+
+        <div className="flex justify-end space-x-2 pt-4">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            取消
+          </Button>
+          <Button onClick={handleSave}>保存配置</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
