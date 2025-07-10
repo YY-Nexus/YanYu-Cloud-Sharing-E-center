@@ -1,26 +1,32 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import {
   ArrowLeft,
   Copy,
   Share2,
   Star,
-  ThumbsUp,
-  ThumbsDown,
-  Download,
-  RefreshCw,
   BookOpen,
-  ExternalLink,
-  MessageCircle,
-  Lightbulb,
   Clock,
   Tag,
   Eye,
   FileText,
-  Target,
+  Check,
+  Map,
+  BarChart3,
+  Globe,
+  Play,
+  Volume2,
+  VolumeX,
+  Search,
+  Zap,
+  Brain,
 } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { HistoryManager } from "@/lib/history"
 
 interface SearchResult {
@@ -29,10 +35,12 @@ interface SearchResult {
   answer: string
   confidence: number
   sources: Array<{
+    id: string
     title: string
     url: string
     snippet: string
     type: "article" | "video" | "document" | "website"
+    reliability: number
   }>
   relatedQuestions: string[]
   tags: string[]
@@ -43,13 +51,24 @@ interface SearchResult {
     model: string
     tokens: number
   }
+  visualizations: {
+    mindmap?: string
+    timeline?: Array<{ year: string; event: string }>
+    outline?: Array<{ level: number; title: string; content: string }>
+  }
+}
+
+interface VoiceSettings {
+  isPlaying: boolean
+  speed: number
+  voice: string
 }
 
 export default function ResultsPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const query = searchParams.get("query") || ""
-  const type = searchParams.get("type") || "text"
+  const mode = searchParams.get("mode") || "quick"
 
   const [result, setResult] = useState<SearchResult | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -57,322 +76,255 @@ export default function ResultsPage() {
   const [rating, setRating] = useState<"up" | "down" | null>(null)
   const [showSources, setShowSources] = useState(false)
   const [copySuccess, setCopySuccess] = useState(false)
+  const [shareSuccess, setShareSuccess] = useState(false)
+  const [activeTab, setActiveTab] = useState("content")
+  const [voiceSettings, setVoiceSettings] = useState<VoiceSettings>({
+    isPlaying: false,
+    speed: 1,
+    voice: "zh-CN",
+  })
+  const [expandedSources, setExpandedSources] = useState<Set<string>>(new Set())
+
+  const speechSynthesis = useRef<SpeechSynthesis | null>(null)
+  const currentUtterance = useRef<SpeechSynthesisUtterance | null>(null)
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      speechSynthesis.current = window.speechSynthesis
+    }
+  }, [])
 
   useEffect(() => {
     // 模拟API调用获取结果
     const fetchResult = async () => {
       setIsLoading(true)
 
-      // 模拟网络延迟
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      try {
+        // 模拟网络延迟
+        await new Promise((resolve) => setTimeout(resolve, mode === "deep" ? 2000 : 1000))
 
-      const mockResult: SearchResult = {
-        id: `result_${Date.now()}`,
-        question: query,
-        answer: generateMockAnswer(query, type),
-        confidence: 0.92,
-        sources: generateMockSources(query),
-        relatedQuestions: generateRelatedQuestions(query),
-        tags: generateTags(query),
-        category: inferCategory(query),
-        timestamp: Date.now(),
-        metadata: {
-          responseTime: 2340,
-          model: "GPT-4",
-          tokens: 1250,
-        },
+        const mockResult: SearchResult = {
+          id: `result_${Date.now()}`,
+          question: query,
+          answer: generateMockAnswer(query, mode),
+          confidence: mode === "deep" ? 0.95 : 0.88,
+          sources: generateMockSources(query),
+          relatedQuestions: generateRelatedQuestions(query),
+          tags: generateTags(query),
+          category: inferCategory(query),
+          timestamp: Date.now(),
+          metadata: {
+            responseTime: mode === "deep" ? 3240 : 1580,
+            model: mode === "deep" ? "GPT-4-Turbo" : "GPT-4",
+            tokens: mode === "deep" ? 2150 : 1250,
+          },
+          visualizations: {
+            mindmap: generateMindmapData(query),
+            timeline: generateTimelineData(query),
+            outline: generateOutlineData(query),
+          },
+        }
+
+        setResult(mockResult)
+        setIsLoading(false)
+
+        // 保存到历史记录
+        HistoryManager.addToHistory({
+          question: mockResult.question,
+          answer: mockResult.answer,
+          timestamp: mockResult.timestamp,
+          category: mockResult.category,
+          tags: mockResult.tags,
+          metadata: {
+            responseTime: mockResult.metadata.responseTime,
+            confidence: mockResult.confidence,
+            relatedQuestions: mockResult.relatedQuestions,
+          },
+        })
+      } catch (error) {
+        console.error("获取结果失败:", error)
+        setIsLoading(false)
       }
-
-      setResult(mockResult)
-      setIsLoading(false)
-
-      // 保存到历史记录
-      HistoryManager.addToHistory({
-        question: mockResult.question,
-        answer: mockResult.answer,
-        timestamp: mockResult.timestamp,
-        category: mockResult.category,
-        tags: mockResult.tags,
-        metadata: {
-          responseTime: mockResult.metadata.responseTime,
-          confidence: mockResult.confidence,
-          relatedQuestions: mockResult.relatedQuestions,
-        },
-      })
     }
 
     if (query) {
       fetchResult()
+    } else {
+      router.push("/")
     }
-  }, [query, type])
+  }, [query, mode, router])
 
-  const generateMockAnswer = (query: string, type: string): string => {
-    const answers = {
-      人工智能: `人工智能（Artificial Intelligence，AI）是计算机科学的一个分支，致力于创建能够执行通常需要人类智能的任务的系统。
+  const generateMockAnswer = (query: string, mode: string): string => {
+    const baseAnswer = `# ${query} - 详细解析
 
 ## 核心概念
 
-人工智能的目标是开发能够模拟、扩展和增强人类智能的计算机系统。这包括：
+${query}是一个重要的概念，在当前技术发展中具有关键作用。让我为您详细分析：
 
-- **学习能力**：从数据中获取知识和技能
-- **推理能力**：基于已知信息得出结论
-- **感知能力**：理解和解释环境信息
-- **语言处理**：理解和生成自然语言
-- **问题解决**：找到复杂问题的解决方案
+### 基本定义
+${query}指的是相关领域中的核心技术或概念，它通过特定的方法和原理来实现预期的功能和效果。
 
-## 主要技术领域
-
-### 1. 机器学习 (Machine Learning)
-- 监督学习：使用标记数据训练模型
-- 无监督学习：从未标记数据中发现模式
-- 强化学习：通过试错学习最优策略
-
-### 2. 深度学习 (Deep Learning)
-- 神经网络：模拟人脑神经元结构
-- 卷积神经网络：专门处理图像数据
-- 循环神经网络：处理序列数据
-
-### 3. 自然语言处理 (NLP)
-- 文本理解和生成
-- 机器翻译
-- 情感分析
-- 对话系统
-
-## 应用领域
-
-人工智能已经在多个领域取得了显著进展：
-
-- **医疗健康**：疾病诊断、药物发现、个性化治疗
-- **金融服务**：风险评估、算法交易、欺诈检测
-- **交通运输**：自动驾驶、路线优化、交通管理
-- **教育**：个性化学习、智能辅导、自动评分
-- **娱乐**：推荐系统、游戏AI、内容创作
-
-## 发展历程
-
-- **1950年代**：AI概念提出，图灵测试
-- **1960-70年代**：专家系统发展
-- **1980年代**：机器学习兴起
-- **2000年代**：大数据推动AI发展
-- **2010年代**：深度学习突破
-- **2020年代**：大语言模型时代
-
-## 未来展望
-
-人工智能的未来发展方向包括：
-
-1. **通用人工智能 (AGI)**：具备人类水平的通用智能
-2. **可解释AI**：让AI决策过程更加透明
-3. **边缘AI**：在设备端运行的轻量级AI
-4. **AI伦理**：确保AI技术的负责任发展
-
-人工智能正在改变我们的生活和工作方式，但同时也带来了新的挑战和机遇。理解AI的基本原理和应用，对于在AI时代保持竞争力至关重要。`,
-
-      机器学习: `机器学习是人工智能的一个重要分支，它使计算机能够在没有明确编程的情况下学习和改进。
-
-## 基本概念
-
-机器学习的核心思想是让计算机通过数据学习模式，并使用这些模式对新数据进行预测或决策。
-
-### 学习过程
-1. **数据收集**：获取相关的训练数据
-2. **特征提取**：识别数据中的重要特征
-3. **模型训练**：使用算法学习数据模式
-4. **模型评估**：测试模型的性能
-5. **模型部署**：将模型应用到实际问题
-
-## 主要类型
-
-### 1. 监督学习 (Supervised Learning)
-使用标记的训练数据来学习输入和输出之间的映射关系。
-
-**分类任务**：
-- 邮件垃圾检测
-- 图像识别
-- 疾病诊断
-
-**回归任务**：
-- 房价预测
-- 股票价格预测
-- 销售预测
-
-**常用算法**：
-- 线性回归
-- 决策树
-- 随机森林
-- 支持向量机
-- 神经网络
-
-### 2. 无监督学习 (Unsupervised Learning)
-从未标记的数据中发现隐藏的模式和结构。
-
-**聚类**：
-- 客户分群
-- 基因序列分析
-- 市场细分
-
-**降维**：
-- 数据可视化
-- 特征选择
-- 噪声减少
-
-**常用算法**：
-- K-means聚类
-- 层次聚类
-- 主成分分析(PCA)
-- t-SNE
-
-### 3. 强化学习 (Reinforcement Learning)
-通过与环境交互，学习最优的行动策略。
-
-**应用场景**：
-- 游戏AI（如AlphaGo）
-- 自动驾驶
-- 机器人控制
-- 推荐系统
-
-## 关键概念
-
-### 过拟合与欠拟合
-- **过拟合**：模型在训练数据上表现很好，但在新数据上表现差
-- **欠拟合**：模型过于简单，无法捕捉数据的复杂模式
-
-### 偏差-方差权衡
-- **偏差**：模型的预测值与真实值的差异
-- **方差**：模型对训练数据变化的敏感性
-
-### 交叉验证
-用于评估模型性能和选择最佳参数的技术。
+### 主要特点
+1. **技术先进性**：采用最新的技术标准和实现方法
+2. **应用广泛性**：在多个领域都有重要应用
+3. **发展前景**：具有良好的发展潜力和市场前景
 
 ## 实际应用
 
-### 商业应用
-- **推荐系统**：Netflix、Amazon的个性化推荐
-- **搜索引擎**：Google的搜索算法优化
-- **金融**：信用评分、风险管理
-- **营销**：客户细分、价格优化
+### 应用场景
+- **场景一**：在特定环境下的应用实例
+- **场景二**：解决实际问题的具体方案
+- **场景三**：与其他技术结合的创新应用
 
-### 科学研究
-- **生物信息学**：基因序列分析
-- **天文学**：天体识别和分类
-- **气候科学**：天气预测模型
-- **材料科学**：新材料发现
+### 成功案例
+通过实际案例分析，我们可以看到${query}在解决实际问题中的重要作用和显著效果。
 
-## 学习路径
+## 技术原理
 
-### 基础知识
-1. **数学基础**：线性代数、概率统计、微积分
-2. **编程技能**：Python、R、SQL
-3. **数据处理**：数据清洗、特征工程
+### 核心机制
+${query}的工作原理基于以下几个关键要素：
+1. 基础理论支撑
+2. 技术实现路径
+3. 优化改进方法
 
-### 进阶学习
-1. **算法理解**：深入学习各种ML算法
-2. **实践项目**：完成端到端的ML项目
-3. **专业领域**：选择特定应用领域深入
+### 关键技术
+- **技术点1**：核心算法和实现方式
+- **技术点2**：系统架构和设计模式
+- **技术点3**：性能优化和扩展性考虑
 
-### 工具和框架
-- **Python库**：scikit-learn、pandas、numpy
-- **深度学习**：TensorFlow、PyTorch
-- **可视化**：matplotlib、seaborn、plotly
-- **云平台**：AWS、Google Cloud、Azure
+## 发展趋势
 
-机器学习是一个快速发展的领域，持续学习和实践是掌握这门技术的关键。`,
+### 当前状态
+目前${query}已经在多个领域得到广泛应用，技术相对成熟，但仍有持续改进的空间。
 
-      default: `根据您的问题"${query}"，我为您提供以下详细解答：
+### 未来展望
+1. **技术演进**：向更高效、更智能的方向发展
+2. **应用拓展**：在更多领域找到新的应用场景
+3. **标准化**：建立更完善的行业标准和规范
 
-这是一个很好的问题。让我从多个角度为您分析：
+## 学习建议
 
-## 核心要点
+### 入门路径
+1. **理论学习**：掌握基础概念和原理
+2. **实践操作**：通过项目实践加深理解
+3. **持续更新**：关注最新发展动态
 
-${query}涉及多个重要方面，需要综合考虑：
+### 推荐资源
+- 权威教程和文档
+- 开源项目和案例
+- 专业社区和论坛
 
-1. **基本概念**：首先需要理解相关的基础概念和原理
-2. **实际应用**：了解在现实中的具体应用场景
-3. **最佳实践**：掌握行业内的最佳实践方法
-4. **注意事项**：避免常见的误区和问题
+## 总结
 
-## 详细分析
+${query}作为重要的技术概念，不仅在当前具有重要价值，在未来发展中也将发挥更大作用。建议深入学习和实践，把握技术发展机遇。`
 
-### 背景信息
-这个话题在当前环境下具有重要意义，需要从历史发展和现状两个维度来理解。
+    if (mode === "deep") {
+      return (
+        baseAnswer +
+        `
 
-### 关键因素
-影响这个问题的主要因素包括：
-- 技术层面的考虑
-- 经济效益的评估
-- 社会影响的分析
-- 未来发展的趋势
+## 深度分析
 
-### 解决方案
-针对您的具体需求，建议采用以下方法：
+### 技术架构深入
+从系统架构角度分析，${query}采用了分层设计模式，包括：
+- **表示层**：用户界面和交互逻辑
+- **业务层**：核心业务逻辑处理
+- **数据层**：数据存储和管理
 
-1. **短期策略**：立即可以实施的措施
-2. **中期规划**：需要一定时间准备的方案
-3. **长期目标**：战略性的发展方向
+### 性能优化策略
+1. **算法优化**：采用更高效的算法实现
+2. **缓存机制**：合理使用缓存提升性能
+3. **并发处理**：支持高并发访问场景
 
-## 实践建议
+### 安全性考虑
+- 数据加密和传输安全
+- 访问控制和权限管理
+- 异常处理和容错机制
 
-基于以上分析，我建议您：
+### 可扩展性设计
+系统设计充分考虑了未来扩展需求，采用模块化架构，支持功能的灵活扩展和升级。
 
-- 从基础开始，循序渐进
-- 结合实际情况，灵活应用
-- 持续学习，保持更新
-- 寻求专业指导，避免弯路
+### 行业对比分析
+与同类技术相比，${query}在以下方面具有优势：
+- 技术成熟度更高
+- 社区支持更完善
+- 文档资料更丰富
 
-希望这个回答对您有所帮助。如果您需要更具体的信息或有其他问题，请随时告诉我。`,
+### 实施建议
+1. **项目规划**：制定详细的实施计划
+2. **团队建设**：组建专业的技术团队
+3. **风险控制**：识别和管控潜在风险
+4. **持续改进**：建立持续优化机制`
+      )
     }
 
-    return answers[query as keyof typeof answers] || answers.default
+    return baseAnswer
   }
 
   const generateMockSources = (query: string) => {
     return [
       {
-        title: "权威百科全书 - " + query,
+        id: "source-1",
+        title: `权威百科全书 - ${query}`,
         url: "https://example.com/encyclopedia",
-        snippet: "提供关于" + query + "的权威定义和详细解释...",
-        type: "article" as const,
+        snippet: `提供关于${query}的权威定义和详细解释，包含历史发展、技术原理、应用场景等全面信息...`,
+        type: "article",
+        reliability: 0.95,
       },
       {
-        title: "学术论文集 - " + query + "研究进展",
+        id: "source-2",
+        title: `学术论文集 - ${query}研究进展`,
         url: "https://example.com/papers",
-        snippet: "最新的学术研究成果和理论发展...",
-        type: "document" as const,
+        snippet: `最新的学术研究成果和理论发展，涵盖${query}的前沿技术和创新应用...`,
+        type: "document",
+        reliability: 0.92,
       },
       {
-        title: "专业视频教程 - " + query + "入门指南",
+        id: "source-3",
+        title: `专业视频教程 - ${query}入门指南`,
         url: "https://example.com/video",
-        snippet: "通过视频形式深入浅出地讲解相关概念...",
-        type: "video" as const,
+        snippet: `通过视频形式深入浅出地讲解${query}相关概念，适合初学者和进阶学习者...`,
+        type: "video",
+        reliability: 0.88,
       },
       {
-        title: "官方文档 - " + query + "技术规范",
+        id: "source-4",
+        title: `官方文档 - ${query}技术规范`,
         url: "https://example.com/docs",
-        snippet: "官方发布的技术文档和使用指南...",
-        type: "website" as const,
+        snippet: `官方发布的技术文档和使用指南，包含详细的API文档和最佳实践...`,
+        type: "website",
+        reliability: 0.96,
+      },
+      {
+        id: "source-5",
+        title: `行业报告 - ${query}市场分析`,
+        url: "https://example.com/report",
+        snippet: `专业机构发布的行业分析报告，包含市场趋势、竞争格局和发展预测...`,
+        type: "document",
+        reliability: 0.90,
       },
     ]
   }
 
   const generateRelatedQuestions = (query: string) => {
-    const related = [
-      query + "的发展历史是什么？",
-      query + "有哪些实际应用？",
-      "如何学习" + query + "？",
-      query + "的未来趋势如何？",
-      query + "与其他技术的区别是什么？",
+    return [
+      `${query}的发展历史和演进过程是什么？`,
+      `${query}在实际项目中有哪些成功应用案例？`,
+      `如何系统性地学习和掌握${query}技术？`,
+      `${query}的未来发展趋势和技术方向如何？`,
+      `${query}与其他相关技术的区别和联系是什么？`,
+      `实施${query}项目需要注意哪些关键要点？`,
     ]
-    return related.slice(0, 4)
   }
 
   const generateTags = (query: string) => {
-    const commonTags = ["技术", "学习", "应用", "发展"]
+    const commonTags = ["技术", "学习", "应用", "发展", "原理", "实践"]
     const specificTags = query.includes("人工智能")
-      ? ["AI", "机器学习", "深度学习"]
+      ? ["AI", "机器学习", "深度学习", "算法"]
       : query.includes("编程")
-        ? ["代码", "开发", "软件"]
-        : ["知识", "概念", "理论"]
-    return [...commonTags, ...specificTags].slice(0, 6)
+        ? ["代码", "开发", "软件", "框架"]
+        : ["知识", "概念", "理论", "方法"]
+    return [...commonTags, ...specificTags].slice(0, 8)
   }
 
   const inferCategory = (query: string) => {
@@ -386,6 +338,31 @@ ${query}涉及多个重要方面，需要综合考虑：
       return "设计"
     }
     return "通用知识"
+  }
+
+  const generateMindmapData = (query: string) => {
+    return `${query}思维导图数据`
+  }
+
+  const generateTimelineData = (query: string) => {
+    return [
+      { year: "2020", event: `${query}技术起步阶段` },
+      { year: "2021", event: `${query}理论完善` },
+      { year: "2022", event: `${query}实际应用` },
+      { year: "2023", event: `${query}广泛推广` },
+      { year: "2024", event: `${query}技术成熟` },
+    ]
+  }
+
+  const generateOutlineData = (query: string) => {
+    return [
+      { level: 1, title: "基本概念", content: `${query}的定义和核心要点` },
+      { level: 1, title: "技术原理", content: `${query}的工作机制和实现方法` },
+      { level: 2, title: "核心算法", content: "关键算法和数据结构" },
+      { level: 2, title: "系统架构", content: "整体架构设计和模块划分" },
+      { level: 1, title: "应用场景", content: `${query}的实际应用领域` },
+      { level: 1, title: "发展趋势", content: `${query}的未来发展方向` },
+    ]
   }
 
   const handleCopy = async () => {
@@ -403,20 +380,32 @@ ${query}涉及多个重要方面，需要综合考虑：
   const handleShare = async () => {
     if (!result) return
 
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: result.question,
-          text: result.answer.slice(0, 200) + "...",
-          url: window.location.href,
-        })
-      } catch (error) {
-        console.error("分享失败:", error)
+    const shareData = {
+      title: `AI搜索结果: ${result.question}`,
+      text: result.answer.slice(0, 200) + "...",
+      url: window.location.href,
+    }
+
+    try {
+      if (navigator.share && window.isSecureContext) {
+        await navigator.share(shareData)
+        setShareSuccess(true)
+        setTimeout(() => setShareSuccess(false), 2000)
+      } else {
+        await navigator.clipboard.writeText(window.location.href)
+        setShareSuccess(true)
+        setTimeout(() => setShareSuccess(false), 2000)
       }
-    } else {
-      // 降级到复制链接
-      await navigator.clipboard.writeText(window.location.href)
-      alert("链接已复制到剪贴板")
+    } catch (error) {
+      console.error("分享失败:", error)
+      try {
+        await navigator.clipboard.writeText(window.location.href)
+        setShareSuccess(true)
+        setTimeout(() => setShareSuccess(false), 2000)
+      } catch (clipboardError) {
+        console.error("复制链接也失败:", clipboardError)
+        alert("请手动复制当前页面链接进行分享")
+      }
     }
   }
 
@@ -438,12 +427,81 @@ ${query}涉及多个重要方面，需要综合考虑：
     router.push(`/thinking?query=${encodeURIComponent(question)}`)
   }
 
+  const handleVoicePlay = () => {
+    if (!result || !speechSynthesis.current) return
+
+    if (voiceSettings.isPlaying) {
+      speechSynthesis.current.cancel()
+      setVoiceSettings((prev) => ({ ...prev, isPlaying: false }))
+      return
+    }
+
+    const utterance = new SpeechSynthesisUtterance(result.answer)
+    utterance.lang = voiceSettings.voice
+    utterance.rate = voiceSettings.speed
+    utterance.onend = () => {
+      setVoiceSettings((prev) => ({ ...prev, isPlaying: false }))
+    }
+
+    currentUtterance.current = utterance
+    speechSynthesis.current.speak(utterance)
+    setVoiceSettings((prev) => ({ ...prev, isPlaying: true }))
+  }
+
+  const toggleSourceExpansion = (sourceId: string) => {
+    setExpandedSources((prev) => {
+      const newSet = new Set(prev)
+      if (newSet.has(sourceId)) {
+        newSet.delete(sourceId)
+      } else {
+        newSet.add(sourceId)
+      }
+      return newSet
+    })
+  }
+
+  const getTypeIcon = (type: string) => {
+    switch (type) {
+      case "website":
+        return <Globe className="w-4 h-4 text-blue-500" />
+      case "video":
+        return <Play className="w-4 h-4 text-red-500" />
+      case "document":
+        return <FileText className="w-4 h-4 text-green-500" />
+      case "article":
+        return <BookOpen className="w-4 h-4 text-purple-500" />
+      default:
+        return <Globe className="w-4 h-4 text-gray-500" />
+    }
+  }
+
+  const getTypeLabel = (type: string) => {
+    const labels = {
+      website: "网站",
+      video: "视频",
+      document: "文档",
+      article: "文章",
+    }
+    return labels[type as keyof typeof labels] || "网页"
+  }
+
+  const getReliabilityColor = (reliability: number) => {
+    if (reliability >= 0.9) return "text-green-600 bg-green-100"
+    if (reliability >= 0.8) return "text-blue-600 bg-blue-100"
+    return "text-yellow-600 bg-yellow-100"
+  }
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">正在生成结果...</p>
+          <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600 text-lg mb-2">
+            {mode === "deep" ? "深度分析中..." : "快速生成中..."}
+          </p>
+          <p className="text-gray-500 text-sm">
+            {mode === "deep" ? "正在进行全面分析，请稍候" : "正在快速处理您的问题"}
+          </p>
         </div>
       </div>
     )
@@ -453,13 +511,11 @@ ${query}涉及多个重要方面，需要综合考虑：
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
+          <Search className="w-16 h-16 text-gray-400 mx-auto mb-4" />
           <p className="text-gray-600 mb-4">未找到结果</p>
-          <button
-            onClick={() => router.back()}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          >
-            返回
-          </button>
+          <Button onClick={() => router.back()} className="bg-blue-600 hover:bg-blue-700 text-white">
+            返回搜索
+          </Button>
         </div>
       </div>
     )
@@ -468,263 +524,416 @@ ${query}涉及多个重要方面，需要综合考虑：
   return (
     <div className="min-h-screen bg-gray-50">
       {/* 顶部导航 */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-10 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <button onClick={() => router.back()} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-            <h1 className="text-lg font-semibold text-gray-900">搜索结果</h1>
+            <Button variant="ghost" size="sm" onClick={() => router.back()}>
+              <ArrowLeft className="w-5 h-5 mr-2" />
+              返回
+            </Button>
+            <div className="flex items-center space-x-2">
+              {mode === "deep" ? (
+                <Brain className="w-5 h-5 text-purple-600" />
+              ) : (
+                <Zap className="w-5 h-5 text-blue-600" />
+              )}
+              <h1 className="text-lg font-semibold text-gray-900">
+                {mode === "deep" ? "深度分析结果" : "快速搜索结果"}
+              </h1>
+            </div>
           </div>
 
           <div className="flex items-center space-x-2">
-            <button
-              onClick={handleCopy}
-              className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-              title="复制答案"
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleVoicePlay}
+              className="text-gray-600 hover:text-blue-600"
+              title={voiceSettings.isPlaying ? "停止播放" : "语音播放"}
             >
-              <Copy className="w-5 h-5" />
-            </button>
-            <button
+              {voiceSettings.isPlaying ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleCopy}
+              className="text-gray-600 hover:text-green-600"
+              title="复制内容"
+            >
+              {copySuccess ? <Check className="w-5 h-5 text-green-600" /> : <Copy className="w-5 h-5" />}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={handleShare}
-              className="p-2 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+              className="text-gray-600 hover:text-blue-600"
               title="分享结果"
             >
-              <Share2 className="w-5 h-5" />
-            </button>
-            <button
+              {shareSuccess ? <Check className="w-5 h-5 text-green-600" /> : <Share2 className="w-5 h-5" />}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={handleFavorite}
-              className={`p-2 rounded-lg transition-colors ${
-                isFavorited ? "text-yellow-600 bg-yellow-50" : "text-gray-600 hover:text-yellow-600 hover:bg-yellow-50"
+              className={`${
+                isFavorited ? "text-yellow-600 bg-yellow-50" : "text-gray-600 hover:text-yellow-600"
               }`}
               title="收藏"
             >
               <Star className={`w-5 h-5 ${isFavorited ? "fill-current" : ""}`} />
-            </button>
+            </Button>
           </div>
         </div>
       </header>
 
-      <div className="max-w-6xl mx-auto px-4 py-6">
+      <div className="max-w-7xl mx-auto px-4 py-6">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* 主要内容 */}
           <div className="lg:col-span-3">
             {/* 问题标题 */}
-            <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200 mb-6">
-              <div className="flex items-start justify-between mb-4">
-                <h2 className="text-2xl font-bold text-gray-900 flex-1">{result.question}</h2>
-                <div className="flex items-center space-x-2 ml-4">
-                  <div className="flex items-center space-x-1 text-sm text-green-600 bg-green-100 px-2 py-1 rounded-full">
-                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                    <span>置信度 {Math.round(result.confidence * 100)}%</span>
+            <Card className="mb-6 border-0 shadow-lg">
+              <CardContent className="p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <h2 className="text-2xl font-bold text-gray-900 flex-1">{result.question}</h2>
+                  <div className="flex items-center space-x-2 ml-4">
+                    <Badge
+                      variant="outline"
+                      className={`${getReliabilityColor(result.confidence)} border-0`}
+                    >
+                      置信度 {Math.round(result.confidence * 100)}%
+                    </Badge>
                   </div>
                 </div>
-              </div>
 
-              <div className="flex items-center space-x-4 text-sm text-gray-500">
-                <div className="flex items-center space-x-1">
-                  <Clock className="w-4 h-4" />
-                  <span>响应时间: {result.metadata.responseTime}ms</span>
+                <div className="flex items-center space-x-4 text-sm text-gray-500">
+                  <div className="flex items-center space-x-1">
+                    <Clock className="w-4 h-4" />
+                    <span>响应时间: {result.metadata.responseTime}ms</span>
+                  </div>
+                  <div className="flex items-center space-x-1">
+                    <Eye className="w-4 h-4" />
+                    <span>模型: {result.metadata.model}</span>
+                  </div>
+                  <div className="flex items-center space-x-1">
+                    <Tag className="w-4 h-4" />
+                    <span>分类: {result.category}</span>
+                  </div>
                 </div>
-                <div className="flex items-center space-x-1">
-                  <Eye className="w-4 h-4" />
-                  <span>模型: {result.metadata.model}</span>
-                </div>
-                <div className="flex items-center space-x-1">
-                  <Tag className="w-4 h-4" />
-                  <span>分类: {result.category}</span>
-                </div>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
 
-            {/* 答案内容 */}
-            <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200 mb-6">
-              <div className="prose max-w-none">
-                <div className="whitespace-pre-wrap text-gray-800 leading-relaxed">{result.answer}</div>
-              </div>
+            {/* 内容标签页 */}
+            <Card className="mb-6 border-0 shadow-lg">
+              <CardContent className="p-0">
+                <Tabs value={activeTab} onValueChange={setActiveTab}>
+                  <TabsList className="w-full justify-start border-b rounded-none bg-transparent p-0">
+                    <TabsTrigger
+                      value="content"
+                      className="flex items-center space-x-2 data-[state=active]:border-b-2 data-[state=active]:border-blue-600 rounded-none"
+                    >
+                      <FileText className="w-4 h-4" />
+                      <span>详细内容</span>
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="mindmap"
+                      className="flex items-center space-x-2 data-[state=active]:border-b-2 data-[state=active]:border-purple-600 rounded-none"
+                    >
+                      <Map className="w-4 h-4" />
+                      <span>思维导图</span>
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="timeline"
+                      className="flex items-center space-x-2 data-[state=active]:border-b-2 data-[state=active]:border-green-600 rounded-none"
+                    >
+                      <BarChart3 className="w-4 h-4" />
+                      <span>时间线</span>
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="outline"
+                      className="flex items-center space-x-2 data-[state=active]:border-b-2 data-[state=active]:border-orange-600 rounded-none"
+                    >
+                      <BookOpen className="w-4 h-4" />
+                      <span>大纲视图</span>
+                    </TabsTrigger>
+                  </TabsList>
 
-              {/* 标签 */}
-              <div className="flex flex-wrap gap-2 mt-6 pt-6 border-t border-gray-200">
-                {result.tags.map((tag, index) => (
-                  <span key={index} className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium">
-                    {tag}
-                  </span>
-                ))}
-              </div>
+                  <TabsContent value="content" className="p-6">
+                    <div className="prose max-w-none">
+                      <div className="whitespace-pre-wrap text-gray-800 leading-relaxed">
+                        {result.answer}
+                      </div>
+                    </div>
 
-              {/* 操作按钮 */}
-              <div className="flex items-center justify-between mt-6 pt-6 border-t border-gray-200">
-                <div className="flex items-center space-x-4">
-                  <button
-                    onClick={() => handleRating("up")}
-                    className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-colors ${
-                      rating === "up"
-                        ? "bg-green-100 text-green-700"
-                        : "text-gray-600 hover:bg-green-50 hover:text-green-600"
-                    }`}
+                    {/* 标签 */}
+                    <div className="flex flex-wrap gap-2 mt-6 pt-6 border-t border-gray-200">
+                      {result.tags.map((tag, index) => (
+                        <Badge
+                          key={index}
+                          variant="secondary"
+                          className="px-3 py-1 bg-blue-100 text-blue-700 hover:bg-blue-200 cursor-pointer"
+                          onClick={() => router.push(`/thinking?query=${encodeURIComponent(tag)}`)}
+                        >
+                          {tag}
+                        </Badge>
+                      ))}
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="mindmap" className="p-6">
+                    <div className="flex justify-center items-center h-64 border border-gray-200 rounded-lg bg-gray-50">
+                      <p className="text-gray-500">{result.visualizations.mindmap || "思维导图数据加载中..."}</p>
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="timeline" className="p-6">
+                    <div className="space-y-4">
+                      {result.visualizations.timeline?.map((item, index) => (
+                        <div key={index} className="flex">
+                          <div className="mr-4 flex flex-col items-center">
+                            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-medium">
+                              {item.year}
+                            </div>
+                            <div className="h-full w-0.5 bg-gray-200 mt-2"></div>
+                          </div>
+                          <div className="flex-1">
+                            <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
+                              <p className="text-gray-800">{item.event}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="outline" className="p-6">
+                    <div className="space-y-3">
+                      {result.visualizations.outline?.map((item, index) => (
+                        <div
+                          key={index}
+                          className={`ml-${(item.level - 1) * 4} pl-4 border-l-2 ${
+                            item.level === 1 ? "border-blue-500" : "border-gray-300"
+                          }`}
+                        >
+                          <h3 className={`text-lg font-medium text-gray-800 mb-1 ${item.level === 1 ? "text-xl" : ""}`}>
+                            {item.title}
+                          </h3>
+                          <p className="text-gray-600">{item.content}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </TabsContent>
+                </Tabs>
+              </CardContent>
+            </Card>
+
+            {/* 来源 */}
+            <Card className="mb-6 border-0 shadow-lg">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xl font-semibold text-gray-900">参考来源</h3>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowSources(!showSources)}
+                    className="text-gray-600 hover:text-blue-600"
                   >
-                    <ThumbsUp className="w-4 h-4" />
-                    <span>有帮助</span>
-                  </button>
-                  <button
-                    onClick={() => handleRating("down")}
-                    className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-colors ${
-                      rating === "down" ? "bg-red-100 text-red-700" : "text-gray-600 hover:bg-red-50 hover:text-red-600"
-                    }`}
-                  >
-                    <ThumbsDown className="w-4 h-4" />
-                    <span>需要改进</span>
-                  </button>
+                    {showSources ? "收起" : "展开"}
+                  </Button>
                 </div>
 
-                <div className="flex items-center space-x-2">
-                  {copySuccess && <span className="text-green-600 text-sm">已复制!</span>}
-                  <button
-                    onClick={() => router.push(`/generate/mindmap?query=${encodeURIComponent(result.question)}`)}
-                    className="flex items-center space-x-2 px-3 py-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
-                  >
-                    <Lightbulb className="w-4 h-4" />
-                    <span>生成思维导图</span>
-                  </button>
-                </div>
-              </div>
-            </div>
+                {showSources && (
+                  <div className="space-y-4">
+                    {result.sources.map((source) => (
+                      <div key={source.id} className="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
+                        <div className="flex items-center mb-2">
+                          {getTypeIcon(source.type)}
+                          <span className="ml-2 text-sm font-medium text-gray-700">{getTypeLabel(source.type)}</span>
+                          <Badge
+                            variant="outline"
+                            className={`ml-2 ${getReliabilityColor(source.reliability)} text-xs border-0`}
+                          >
+                            可靠性 {Math.round(source.reliability * 100)}%
+                          </Badge>
+                        </div>
+                        <h4 className="font-medium text-gray-900 hover:text-blue-600 mb-1">
+                          <a href={source.url} target="_blank" rel="noopener noreferrer">
+                            {source.title}
+                          </a>
+                        </h4>
+                        <p className="text-sm text-gray-600 mb-2">
+                          {expandedSources.has(source.id) ? source.snippet : `${source.snippet.substring(0, 100)}...`}
+                        </p>
+                        <button
+                          className="text-blue-600 text-sm hover:underline"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            toggleSourceExpansion(source.id)
+                          }}
+                        >
+                          {expandedSources.has(source.id) ? "收起" : "展开"}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
             {/* 相关问题 */}
-            {result.relatedQuestions.length > 0 && (
-              <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                  <MessageCircle className="w-5 h-5 mr-2 text-blue-600" />
-                  相关问题
-                </h3>
+            <Card className="border-0 shadow-lg">
+              <CardContent className="p-6">
+                <h3 className="text-xl font-semibold text-gray-900 mb-4">相关问题</h3>
                 <div className="space-y-3">
                   {result.relatedQuestions.map((question, index) => (
-                    <button
+                    <div
                       key={index}
+                      className="bg-white p-4 rounded-lg shadow-sm border border-gray-100 hover:border-blue-200 transition-all cursor-pointer"
                       onClick={() => handleRelatedQuestion(question)}
-                      className="w-full text-left p-3 rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition-colors"
                     >
-                      <div className="flex items-center justify-between">
-                        <span className="text-gray-800">{question}</span>
-                        <ExternalLink className="w-4 h-4 text-gray-400" />
-                      </div>
-                    </button>
+                      <p className="text-gray-800">{question}</p>
+                    </div>
                   ))}
                 </div>
-              </div>
-            )}
+              </CardContent>
+            </Card>
           </div>
 
           {/* 侧边栏 */}
-          <div className="space-y-6">
-            {/* 信息来源 */}
-            <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">信息来源</h3>
-                <button
-                  onClick={() => setShowSources(!showSources)}
-                  className="text-blue-600 hover:text-blue-700 text-sm"
-                >
-                  {showSources ? "收起" : "展开"}
-                </button>
-              </div>
+          <div className="lg:col-span-1">
+            {/* 操作栏 */}
+            <Card className="mb-6 border-0 shadow-lg">
+              <CardContent className="p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">对结果评分</h3>
+                <div className="flex space-x-2">
+                  <Button
+                    variant={rating === "up" ? "solid" : "outline"}
+                    size="sm"
+                    className={rating === "up" ? "bg-green-600 text-white" : "text-green-600"}
+                    onClick={() => handleRating("up")}
+                  >
+                    <Check className="w-4 h-4 mr-1" /> 有帮助
+                  </Button>
+                  <Button
+                    variant={rating === "down" ? "solid" : "outline"}
+                    size="sm"
+                    className={rating === "down" ? "bg-red-600 text-white" : "text-red-600"}
+                    onClick={() => handleRating("down")}
+                  >
+                    <Check className="w-4 h-4 mr-1" /> 无帮助
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
 
-              <div className={`space-y-3 ${showSources ? "" : "max-h-32 overflow-hidden"}`}>
-                {result.sources.map((source, index) => (
-                  <div key={index} className="border border-gray-200 rounded-lg p-3">
-                    <div className="flex items-start space-x-3">
-                      <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                        {source.type === "video" ? (
-                          <div className="w-4 h-4 bg-blue-600 rounded-sm"></div>
-                        ) : source.type === "document" ? (
-                          <FileText className="w-4 h-4 text-blue-600" />
-                        ) : (
-                          <BookOpen className="w-4 h-4 text-blue-600" />
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h4 className="font-medium text-gray-900 text-sm line-clamp-1">{source.title}</h4>
-                        <p className="text-xs text-gray-600 mt-1 line-clamp-2">{source.snippet}</p>
-                        <a
-                          href={source.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 hover:text-blue-700 text-xs mt-2 inline-flex items-center"
-                        >
-                          查看来源
-                          <ExternalLink className="w-3 h-3 ml-1" />
-                        </a>
-                      </div>
+            {/* 语音设置 */}
+            <Card className="mb-6 border-0 shadow-lg">
+              <CardContent className="p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">语音播放</h3>
+                <div className="space-y-4">
+                  <Button
+                    variant="solid"
+                    size="sm"
+                    onClick={handleVoicePlay}
+                    className={`${voiceSettings.isPlaying ? "bg-red-600 hover:bg-red-700" : "bg-blue-600 hover:bg-blue-700"} w-full`}
+                  >
+                    {voiceSettings.isPlaying ? (
+                      <>
+                        <VolumeX className="w-4 h-4 mr-2" /> 停止播放
+                      </>
+                    ) : (
+                      <>
+                        <Volume2 className="w-4 h-4 mr-2" /> 开始播放
+                      </>
+                    )}
+                  </Button>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">语速</label>
+                    <input
+                      type="range"
+                      min="0.5"
+                      max="2"
+                      step="0.1"
+                      value={voiceSettings.speed}
+                      onChange={(e) => setVoiceSettings((prev) => ({ ...prev, speed: parseFloat(e.target.value) }))}
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                    />
+                    <div className="flex justify-between text-xs text-gray-500 mt-1">
+                      <span>慢</span>
+                      <span>标准</span>
+                      <span>快</span>
                     </div>
                   </div>
-                ))}
-              </div>
-            </div>
 
-            {/* 快速操作 */}
-            <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">快速操作</h3>
-              <div className="space-y-3">
-                <button
-                  onClick={() => router.push(`/learning-path/create?topic=${encodeURIComponent(result.question)}`)}
-                  className="w-full flex items-center space-x-3 p-3 text-left rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition-colors"
-                >
-                  <Target className="w-5 h-5 text-blue-600" />
-                  <span className="text-gray-800">创建学习路径</span>
-                </button>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">语音</label>
+                    <select
+                      value={voiceSettings.voice}
+                      onChange={(e) => setVoiceSettings((prev) => ({ ...prev, voice: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                    >
+                      <option value="zh-CN">中文 (中国大陆)</option>
+                      <option value="zh-TW">中文 (台湾)</option>
+                      <option value="en-US">英文 (美国)</option>
+                      <option value="ja-JP">日文</option>
+                      <option value="ko-KR">韩文</option>
+                    </select>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
-                <button
-                  onClick={() => router.push(`/generate/poster?topic=${encodeURIComponent(result.question)}`)}
-                  className="w-full flex items-center space-x-3 p-3 text-left rounded-lg border border-gray-200 hover:border-green-300 hover:bg-green-50 transition-colors"
-                >
-                  <Download className="w-5 h-5 text-green-600" />
-                  <span className="text-gray-800">生成海报</span>
-                </button>
+            {/* 分享 */}
+            <Card className="mb-6 border-0 shadow-lg">
+              <CardContent className="p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">分享结果</h3>
+                <div className="flex space-x-3">
+                  <Button variant="ghost" size="sm" className="text-gray-600 hover:text-blue-600">
+                    <Share2 className="w-5 h-5" />
+                  </Button>
+                  <Button variant="ghost" size="sm" className="text-gray-600 hover:text-green-600">
+                    <Copy className="w-5 h-5" />
+                  </Button>
+                  <Button variant="ghost" size="sm" className="text-gray-600 hover:text-purple-600">
+                    <FileText className="w-5 h-5" />
+                  </Button>
+                  <Button variant="ghost" size="sm" className="text-gray-600 hover:text-red-600">
+                    <Eye className="w-5 h-5" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
 
-                <button
-                  onClick={() => router.push(`/community/share?content=${encodeURIComponent(result.answer)}`)}
-                  className="w-full flex items-center space-x-3 p-3 text-left rounded-lg border border-gray-200 hover:border-purple-300 hover:bg-purple-50 transition-colors"
-                >
-                  <Share2 className="w-5 h-5 text-purple-600" />
-                  <span className="text-gray-800">分享到社区</span>
-                </button>
-
-                <button
-                  onClick={() => router.push(`/thinking?query=${encodeURIComponent("请深入分析：" + result.question)}`)}
-                  className="w-full flex items-center space-x-3 p-3 text-left rounded-lg border border-gray-200 hover:border-orange-300 hover:bg-orange-50 transition-colors"
-                >
-                  <RefreshCw className="w-5 h-5 text-orange-600" />
-                  <span className="text-gray-800">深入分析</span>
-                </button>
-              </div>
-            </div>
-
-            {/* 统计信息 */}
-            <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">统计信息</h3>
-              <div className="space-y-3 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">响应时间:</span>
-                  <span className="font-medium">{result.metadata.responseTime}ms</span>
+            {/* 元数据 */}
+            <Card className="border-0 shadow-lg">
+              <CardContent className="p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">元数据</h3>
+                <div className="space-y-3">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">生成时间</span>
+                    <span className="text-gray-900">
+                      {new Date(result.timestamp).toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">模型</span>
+                    <span className="text-gray-900">{result.metadata.model}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">响应时间</span>
+                    <span className="text-gray-900">{result.metadata.responseTime}ms</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">令牌数量</span>
+                    <span className="text-gray-900">{result.metadata.tokens}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">置信度</span>
+                    <span className="text-gray-900">{Math.round(result.confidence * 100)}%</span>
+                  </div>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">使用模型:</span>
-                  <span className="font-medium">{result.metadata.model}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Token数量:</span>
-                  <span className="font-medium">{result.metadata.tokens.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">置信度:</span>
-                  <span className="font-medium">{Math.round(result.confidence * 100)}%</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">生成时间:</span>
-                  <span className="font-medium">{new Date(result.timestamp).toLocaleTimeString()}</span>
-                </div>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </div>

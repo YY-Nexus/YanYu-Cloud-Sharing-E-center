@@ -76,7 +76,7 @@ export class BundleOptimizer {
         currentSize -= compressionResult.savings
       }
 
-      // 5. 代码压缩
+      // 5. 代码���缩
       const minificationResult = await this.optimizeMinification(currentStats)
       if (minificationResult.savings > 0) {
         optimizations.push(minificationResult)

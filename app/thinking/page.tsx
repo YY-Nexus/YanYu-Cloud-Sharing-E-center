@@ -173,35 +173,41 @@ export default function ThinkingPage() {
       setSteps((prev) => prev.map((s, i) => (i === stepIndex ? { ...s, status: "processing" as const } : s)))
 
       // 模拟步骤执行过程
+      let currentProgress = 0
       const progressInterval = setInterval(() => {
+        currentProgress += Math.random() * 15 + 5 // 5-20% 增量
+        const newProgress = Math.min(currentProgress, 100)
+
         setSteps((prev) =>
           prev.map((s, i) => {
-            if (i === stepIndex && s.progress < 100) {
-              const increment = Math.random() * 15 + 5 // 5-20% 增量
-              const newProgress = Math.min(s.progress + increment, 100)
-
-              if (newProgress >= 100) {
-                clearInterval(progressInterval)
-                // 标记为完成
-                setTimeout(() => {
-                  setSteps((prev) =>
-                    prev.map((s, i) => (i === stepIndex ? { ...s, status: "completed" as const, progress: 100 } : s)),
-                  )
-                  setCurrentStep(stepIndex + 1)
-                }, 300)
-              }
-
+            if (i === stepIndex) {
               return { ...s, progress: newProgress }
             }
             return s
           }),
         )
-      }, step.estimatedTime / 20) // 分20次更新进度
 
-      // 清理定时器
-      setTimeout(() => {
-        clearInterval(progressInterval)
-      }, step.estimatedTime + 1000)
+        if (newProgress >= 100) {
+          clearInterval(progressInterval)
+          // 标记为完成并继续下一步
+          setSteps((prev) =>
+            prev.map((s, i) => (i === stepIndex ? { ...s, status: "completed" as const, progress: 100 } : s)),
+          )
+
+          // 延迟后执行下一步
+          setTimeout(() => {
+            if (stepIndex + 1 < steps.length) {
+              setCurrentStep(stepIndex + 1)
+            } else {
+              // 所有步骤完成
+              setIsComplete(true)
+              setTimeout(() => {
+                router.push(`/results?query=${encodeURIComponent(query)}&type=${type}`)
+              }, 1500)
+            }
+          }, 500)
+        }
+      }, step.estimatedTime / 20) // 分20次更新进度
     }
 
     // 开始执行当前步骤
