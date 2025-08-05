@@ -1,545 +1,494 @@
-import { generateText } from "ai"
-import { openai } from "@ai-sdk/openai"
-
-export interface EmotionalProfile {
-  userId: string
-  dominantEmotions: string[]
-  emotionalPatterns: EmotionalPattern[]
-  triggers: EmotionalTrigger[]
-  preferences: EmotionalPreference[]
-  adaptationHistory: AdaptationRecord[]
-  lastUpdated: number
-}
-
-export interface EmotionalPattern {
-  pattern: string
-  frequency: number
-  contexts: string[]
-  timeOfDay: number[]
-  duration: number
-  intensity: number
-}
-
-export interface EmotionalTrigger {
-  trigger: string
-  emotion: string
-  intensity: number
-  context: string[]
-  frequency: number
-}
-
-export interface EmotionalPreference {
-  category: string
-  preference: string
-  emotionalContext: string
-  strength: number
-}
-
-export interface AdaptationRecord {
+export interface EmotionData {
+  primary: "joy" | "sadness" | "anger" | "fear" | "surprise" | "disgust" | "neutral"
+  secondary: string[]
+  intensity: number // 0-1
+  confidence: number // 0-1
+  valence: number // -1 to 1 (negative to positive)
+  arousal: number // 0-1 (calm to excited)
   timestamp: number
-  originalEmotion: string
-  targetEmotion: string
-  intervention: string
-  success: boolean
-  feedback: number
+  source: "text" | "voice" | "facial" | "physiological" | "multimodal"
+}
+
+export interface ColorTherapyConfig {
+  primaryColor: string
+  accentColor: string
+  backgroundColor: string
+  textColor: string
+  intensity: number // 0-1
+  duration: number // milliseconds
+  transition: "smooth" | "pulse" | "wave" | "gradient"
+}
+
+export interface BreathingExercise {
+  type: "box" | "triangle" | "4-7-8" | "coherent"
+  inhaleTime: number
+  holdTime: number
+  exhaleTime: number
+  cycles: number
+  guidance: {
+    visual: boolean
+    audio: boolean
+    haptic: boolean
+  }
+}
+
+export interface MusicTherapySession {
+  genre: "ambient" | "classical" | "nature" | "binaural" | "custom"
+  tempo: number // BPM
+  key: string
+  duration: number // minutes
+  adaptToEmotion: boolean
+  volumeControl: "auto" | "manual"
 }
 
 export interface EmotionalIntervention {
-  type: "color_therapy" | "music_therapy" | "breathing_guide" | "content_adjustment" | "interaction_style"
-  config: any
-  duration: number
-  intensity: number
+  id: string
+  type: "color_therapy" | "breathing" | "music" | "mindfulness" | "cognitive_reframe"
+  trigger: EmotionData
+  config: ColorTherapyConfig | BreathingExercise | MusicTherapySession | any
+  effectiveness: number // 0-1, learned over time
+  lastUsed: number
+  userFeedback: Array<{ rating: number; timestamp: number; notes?: string }>
 }
 
-export interface MoodBasedInterface {
-  colorScheme: {
-    primary: string
-    secondary: string
-    accent: string
-    background: string
-    text: string
+export interface GroupEmotionState {
+  groupId: string
+  participants: Array<{
+    userId: string
+    emotion: EmotionData
+    influence: number // how much this person affects group mood
+  }>
+  averageEmotion: EmotionData
+  emotionalDynamics: {
+    harmony: number // 0-1, how aligned emotions are
+    energy: number // 0-1, overall group energy
+    stability: number // 0-1, how stable the emotional state is
+    trends: Array<{ emotion: string; direction: "rising" | "falling"; strength: number }>
   }
-  animations: {
-    speed: "slow" | "normal" | "fast"
-    type: "gentle" | "energetic" | "minimal"
-    intensity: number
-  }
-  layout: {
-    spacing: "compact" | "normal" | "spacious"
-    elements: "minimal" | "standard" | "rich"
-    focus: "single" | "multi"
-  }
-  interactions: {
-    feedback: "subtle" | "normal" | "pronounced"
-    responsiveness: number
-    guidance: "minimal" | "helpful" | "detailed"
-  }
+  recommendations: string[]
 }
 
-export class EmotionAIEngine {
-  private static emotionalProfiles: Map<string, EmotionalProfile> = new Map()
-  private static interventionHistory: Map<string, EmotionalIntervention[]> = new Map()
-  private static moodInterfaces: Map<string, MoodBasedInterface> = new Map()
+export class EmotionAI {
+  private emotionHistory: Map<string, EmotionData[]> = new Map()
+  private interventions: Map<string, EmotionalIntervention[]> = new Map()
+  private groupStates: Map<string, GroupEmotionState> = new Map()
+  private personalityProfiles: Map<string, any> = new Map()
+  private currentTherapySessions: Map<string, any> = new Map()
 
-  // 实时情绪分析
-  static async analyzeRealTimeEmotion(data: {
+  async analyzeEmotion(input: {
+    userId: string
     text?: string
-    voice?: Float32Array
-    facial?: ImageData
+    audioData?: ArrayBuffer
+    videoFrame?: ImageData
     physiological?: {
       heartRate?: number
       skinConductance?: number
       temperature?: number
-      breathing?: number
+      bloodPressure?: { systolic: number; diastolic: number }
     }
-    behavioral?: {
-      clickPattern?: number[]
-      scrollSpeed?: number
-      dwellTime?: number
-      errorRate?: number
+  }): Promise<EmotionData> {
+    try {
+      const multimodalAnalysis = await this.performMultimodalAnalysis(input)
+
+      // 融合多模态分析结果
+      const fusedEmotion = this.fuseEmotionData(multimodalAnalysis)
+
+      // 应用个性化调整
+      const personalizedEmotion = this.applyPersonalityAdjustment(input.userId, fusedEmotion)
+
+      // 更新情绪历史
+      this.updateEmotionHistory(input.userId, personalizedEmotion)
+
+      // 检查是否需要干预
+      await this.checkForIntervention(input.userId, personalizedEmotion)
+
+      return personalizedEmotion
+    } catch (error) {
+      console.error("情绪分析失败:", error)
+      return this.getDefaultEmotion()
     }
-  }): Promise<{
-    primaryEmotion: string
-    secondaryEmotions: string[]
-    intensity: number
-    confidence: number
-    valence: number // -1 to 1 (negative to positive)
-    arousal: number // 0 to 1 (calm to excited)
-    context: any
-    recommendations: string[]
-  }> {
-    const analyses: any[] = []
+  }
+
+  async generateColorTherapy(emotion: EmotionData): Promise<ColorTherapyConfig> {
+    // 基于情绪状态生成色彩疗法配置
+    const colorMap = {
+      joy: { primary: "#FFD700", accent: "#FFA500", bg: "#FFFACD" },
+      sadness: { primary: "#87CEEB", accent: "#4682B4", bg: "#F0F8FF" },
+      anger: { primary: "#FF6B6B", accent: "#FF4444", bg: "#FFE4E1" },
+      fear: { primary: "#DDA0DD", accent: "#9370DB", bg: "#F8F0FF" },
+      surprise: { primary: "#98FB98", accent: "#32CD32", bg: "#F0FFF0" },
+      disgust: { primary: "#F0E68C", accent: "#DAA520", bg: "#FFFAF0" },
+      neutral: { primary: "#D3D3D3", accent: "#A9A9A9", bg: "#F5F5F5" },
+    }
+
+    const colors = colorMap[emotion.primary] || colorMap.neutral
+
+    return {
+      primaryColor: colors.primary,
+      accentColor: colors.accent,
+      backgroundColor: colors.bg,
+      textColor: this.getOptimalTextColor(colors.bg),
+      intensity: Math.max(0.3, 1 - emotion.intensity), // 情绪强度越高，颜色越柔和
+      duration: 5000 + emotion.intensity * 10000, // 5-15秒
+      transition: emotion.arousal > 0.7 ? "pulse" : "smooth",
+    }
+  }
+
+  async generateBreathingExercise(emotion: EmotionData): Promise<BreathingExercise> {
+    // 根据情绪状态推荐呼吸练习
+    let exerciseType: BreathingExercise["type"] = "box"
+    let inhale = 4,
+      hold = 4,
+      exhale = 4,
+      cycles = 5
+
+    if (emotion.primary === "anger" || emotion.arousal > 0.8) {
+      // 高激活状态，使用4-7-8呼吸法平静
+      exerciseType = "4-7-8"
+      inhale = 4
+      hold = 7
+      exhale = 8
+      cycles = 4
+    } else if (emotion.primary === "sadness" || emotion.valence < -0.5) {
+      // 低情绪状态，使用连贯呼吸提升能量
+      exerciseType = "coherent"
+      inhale = 5
+      hold = 0
+      exhale = 5
+      cycles = 10
+    } else if (emotion.primary === "fear" || emotion.primary === "surprise") {
+      // 不稳定状态，使用盒式呼吸稳定
+      exerciseType = "box"
+      inhale = 4
+      hold = 4
+      exhale = 4
+      cycles = 6
+    }
+
+    return {
+      type: exerciseType,
+      inhaleTime: inhale,
+      holdTime: hold,
+      exhaleTime: exhale,
+      cycles,
+      guidance: {
+        visual: true,
+        audio: emotion.intensity > 0.6, // 强烈情绪时提供音频指导
+        haptic: false, // 可以根据设备能力启用
+      },
+    }
+  }
+
+  async generateMusicTherapy(emotion: EmotionData): Promise<MusicTherapySession> {
+    const musicMap = {
+      joy: { genre: "ambient", tempo: 120, key: "C major", duration: 10 },
+      sadness: { genre: "classical", tempo: 60, key: "D minor", duration: 15 },
+      anger: { genre: "nature", tempo: 40, key: "F major", duration: 20 },
+      fear: { genre: "ambient", tempo: 70, key: "G major", duration: 12 },
+      surprise: { genre: "binaural", tempo: 100, key: "A major", duration: 8 },
+      disgust: { genre: "nature", tempo: 50, key: "E minor", duration: 10 },
+      neutral: { genre: "ambient", tempo: 80, key: "C major", duration: 10 },
+    } as const
+
+    const config = musicMap[emotion.primary] || musicMap.neutral
+
+    return {
+      genre: config.genre,
+      tempo: config.tempo + emotion.arousal * 20, // 调整节拍适应激活水平
+      key: config.key,
+      duration: config.duration,
+      adaptToEmotion: true,
+      volumeControl: "auto",
+    }
+  }
+
+  async analyzeGroupEmotion(
+    groupId: string,
+    participants: Array<{ userId: string; emotion: EmotionData }>,
+  ): Promise<GroupEmotionState> {
+    // 计算群体情绪状态
+    const totalParticipants = participants.length
+    if (totalParticipants === 0) {
+      throw new Error("群体中没有参与者")
+    }
+
+    // 计算平均情绪
+    const emotionCounts = new Map<string, number>()
+    let totalValence = 0
+    let totalArousal = 0
+    let totalIntensity = 0
+
+    participants.forEach(({ emotion }) => {
+      emotionCounts.set(emotion.primary, (emotionCounts.get(emotion.primary) || 0) + 1)
+      totalValence += emotion.valence
+      totalArousal += emotion.arousal
+      totalIntensity += emotion.intensity
+    })
+
+    // 找出主导情绪
+    const dominantEmotion = Array.from(emotionCounts.entries()).sort(
+      ([, a], [, b]) => b - a,
+    )[0][0] as EmotionData["primary"]
+
+    const averageEmotion: EmotionData = {
+      primary: dominantEmotion,
+      secondary: [],
+      intensity: totalIntensity / totalParticipants,
+      confidence: 0.8,
+      valence: totalValence / totalParticipants,
+      arousal: totalArousal / totalParticipants,
+      timestamp: Date.now(),
+      source: "multimodal",
+    }
+
+    // 计算情绪动态
+    const emotionalDynamics = this.calculateEmotionalDynamics(participants)
+
+    // 生成建议
+    const recommendations = this.generateGroupRecommendations(averageEmotion, emotionalDynamics)
+
+    const groupState: GroupEmotionState = {
+      groupId,
+      participants: participants.map((p) => ({
+        ...p,
+        influence: this.calculateEmotionalInfluence(p.userId, participants),
+      })),
+      averageEmotion,
+      emotionalDynamics,
+      recommendations,
+    }
+
+    this.groupStates.set(groupId, groupState)
+    return groupState
+  }
+
+  async adaptUIToEmotion(userId: string, emotion: EmotionData): Promise<any> {
+    const colorTherapy = await this.generateColorTherapy(emotion)
+
+    // 生成UI适应配置
+    const uiConfig = {
+      colors: colorTherapy,
+      layout: {
+        spacing: emotion.intensity > 0.7 ? "relaxed" : "normal",
+        animations: emotion.arousal > 0.6 ? "minimal" : "normal",
+        contrast: emotion.primary === "fear" ? "high" : "normal",
+      },
+      interactions: {
+        responseTime: emotion.arousal > 0.8 ? "immediate" : "normal",
+        feedback: emotion.intensity > 0.6 ? "enhanced" : "standard",
+        guidance: emotion.confidence < 0.6 ? "detailed" : "minimal",
+      },
+      content: {
+        tone: this.getContentTone(emotion),
+        complexity: emotion.arousal > 0.7 ? "simplified" : "normal",
+        supportLevel: emotion.valence < -0.3 ? "high" : "normal",
+      },
+    }
+
+    return uiConfig
+  }
+
+  startEmotionalIntervention(userId: string, intervention: EmotionalIntervention): void {
+    const userInterventions = this.interventions.get(userId) || []
+    userInterventions.push(intervention)
+    this.interventions.set(userId, userInterventions)
+
+    // 开始干预会话
+    this.currentTherapySessions.set(`${userId}_${intervention.id}`, {
+      startTime: Date.now(),
+      intervention,
+      progress: 0,
+      userEngagement: 1.0,
+    })
+  }
+
+  async recordInterventionFeedback(
+    userId: string,
+    interventionId: string,
+    feedback: { rating: number; notes?: string },
+  ): Promise<void> {
+    const userInterventions = this.interventions.get(userId) || []
+    const intervention = userInterventions.find((i) => i.id === interventionId)
+
+    if (intervention) {
+      intervention.userFeedback.push({
+        rating: feedback.rating,
+        timestamp: Date.now(),
+        notes: feedback.notes,
+      })
+
+      // 更新干预效果评估
+      const avgRating =
+        intervention.userFeedback.reduce((sum, f) => sum + f.rating, 0) / intervention.userFeedback.length
+      intervention.effectiveness = avgRating / 5 // 转换为0-1范围
+    }
+  }
+
+  getEmotionHistory(userId: string, timeRange?: { start: number; end: number }): EmotionData[] {
+    const history = this.emotionHistory.get(userId) || []
+
+    if (timeRange) {
+      return history.filter((emotion) => emotion.timestamp >= timeRange.start && emotion.timestamp <= timeRange.end)
+    }
+
+    return history
+  }
+
+  getEmotionTrends(userId: string, period: "hour" | "day" | "week" | "month"): any {
+    const history = this.getEmotionHistory(userId)
+    if (history.length === 0) return null
+
+    const now = Date.now()
+    const periodMs = {
+      hour: 60 * 60 * 1000,
+      day: 24 * 60 * 60 * 1000,
+      week: 7 * 24 * 60 * 60 * 1000,
+      month: 30 * 24 * 60 * 60 * 1000,
+    }[period]
+
+    const recentHistory = history.filter((emotion) => emotion.timestamp > now - periodMs)
+
+    if (recentHistory.length === 0) return null
+
+    // 计算趋势
+    const valenceValues = recentHistory.map((e) => e.valence)
+    const arousalValues = recentHistory.map((e) => e.arousal)
+
+    return {
+      period,
+      dataPoints: recentHistory.length,
+      valence: {
+        average: valenceValues.reduce((a, b) => a + b, 0) / valenceValues.length,
+        trend: this.calculateTrend(valenceValues),
+        stability: this.calculateStability(valenceValues),
+      },
+      arousal: {
+        average: arousalValues.reduce((a, b) => a + b, 0) / arousalValues.length,
+        trend: this.calculateTrend(arousalValues),
+        stability: this.calculateStability(arousalValues),
+      },
+      dominantEmotions: this.getDominantEmotions(recentHistory),
+    }
+  }
+
+  private async performMultimodalAnalysis(input: any): Promise<any[]> {
+    const analyses = []
 
     // 文本情绪分析
-    if (data.text) {
-      const textAnalysis = await this.analyzeTextEmotion(data.text)
-      analyses.push({ ...textAnalysis, weight: 0.3 })
+    if (input.text) {
+      analyses.push(await this.analyzeTextEmotion(input.text))
     }
 
     // 语音情绪分析
-    if (data.voice) {
-      const voiceAnalysis = await this.analyzeVoiceEmotion(data.voice)
-      analyses.push({ ...voiceAnalysis, weight: 0.4 })
+    if (input.audioData) {
+      analyses.push(await this.analyzeVoiceEmotion(input.audioData))
     }
 
     // 面部表情分析
-    if (data.facial) {
-      const facialAnalysis = await this.analyzeFacialEmotion(data.facial)
-      analyses.push({ ...facialAnalysis, weight: 0.5 })
+    if (input.videoFrame) {
+      analyses.push(await this.analyzeFacialEmotion(input.videoFrame))
     }
 
     // 生理信号分析
-    if (data.physiological) {
-      const physioAnalysis = await this.analyzePhysiologicalEmotion(data.physiological)
-      analyses.push({ ...physioAnalysis, weight: 0.6 })
+    if (input.physiological) {
+      analyses.push(await this.analyzePhysiologicalEmotion(input.physiological))
     }
 
-    // 行为模式分析
-    if (data.behavioral) {
-      const behaviorAnalysis = await this.analyzeBehavioralEmotion(data.behavioral)
-      analyses.push({ ...behaviorAnalysis, weight: 0.2 })
-    }
-
-    // 融合分析结果
-    const fusedResult = this.fuseEmotionalAnalyses(analyses)
-
-    // 生成个性化建议
-    const recommendations = await this.generateEmotionalRecommendations(fusedResult)
-
-    return {
-      ...fusedResult,
-      recommendations,
-    }
+    return analyses
   }
 
-  // 情绪适应性界面生成
-  static async generateEmotionalInterface(
-    userId: string,
-    currentEmotion: {
-      primary: string
-      intensity: number
-      valence: number
-      arousal: number
-    },
-  ): Promise<MoodBasedInterface> {
-    const profile = this.getEmotionalProfile(userId)
-    const existingInterface = this.moodInterfaces.get(userId)
+  private async analyzeTextEmotion(text: string): Promise<EmotionData> {
+    // 简化的文本情绪分析
+    // 实际应用中应该使用更复杂的NLP模型
 
-    try {
-      const { text } = await generateText({
-        model: openai("gpt-4o"),
-        system: `你是情绪感知UI设计专家。基于用户当前情绪状态设计最适合的界面配置。
+    const emotionKeywords = {
+      joy: ["开心", "快乐", "高兴", "兴奋", "愉快", "满意"],
+      sadness: ["难过", "伤心", "沮丧", "失望", "悲伤", "郁闷"],
+      anger: ["生气", "愤怒", "恼火", "烦躁", "气愤", "不满"],
+      fear: ["害怕", "恐惧", "担心", "焦虑", "紧张", "不安"],
+      surprise: ["惊讶", "意外", "震惊", "吃惊", "惊奇"],
+      disgust: ["恶心", "厌恶", "反感", "讨厌"],
+    }
 
-用户情绪状态:
-- 主要情绪: ${currentEmotion.primary}
-- 强度: ${currentEmotion.intensity}
-- 情绪价值: ${currentEmotion.valence} (-1负面到1正面)
-- 唤醒度: ${currentEmotion.arousal} (0平静到1兴奋)
+    let maxScore = 0
+    let detectedEmotion: EmotionData["primary"] = "neutral"
 
-用户情绪档案:
-- 主导情绪: ${profile.dominantEmotions.join(", ")}
-- 情绪偏好: ${JSON.stringify(profile.preferences.slice(0, 3))}
+    for (const [emotion, keywords] of Object.entries(emotionKeywords)) {
+      const score = keywords.reduce((count, keyword) => count + (text.includes(keyword) ? 1 : 0), 0)
 
-请设计情绪适应性界面配置，包括色彩、动画、布局、交互方式。返回JSON格式。`,
-        prompt: "为当前用户情绪状态生成最适合的界面配置。",
-      })
-
-      const interfaceConfig = JSON.parse(text)
-      const moodInterface: MoodBasedInterface = {
-        colorScheme: interfaceConfig.colorScheme || this.getDefaultColorScheme(currentEmotion),
-        animations: interfaceConfig.animations || this.getDefaultAnimations(currentEmotion),
-        layout: interfaceConfig.layout || this.getDefaultLayout(currentEmotion),
-        interactions: interfaceConfig.interactions || this.getDefaultInteractions(currentEmotion),
+      if (score > maxScore) {
+        maxScore = score
+        detectedEmotion = emotion as EmotionData["primary"]
       }
-
-      this.moodInterfaces.set(userId, moodInterface)
-      return moodInterface
-    } catch (error) {
-      console.error("情绪界面生成失败:", error)
-      return this.getFallbackInterface(currentEmotion)
-    }
-  }
-
-  // 情绪干预系统
-  static async performEmotionalIntervention(
-    userId: string,
-    targetEmotion: string,
-    currentEmotion: any,
-  ): Promise<{
-    interventions: EmotionalIntervention[]
-    estimatedDuration: number
-    successProbability: number
-    followUpActions: string[]
-  }> {
-    const profile = this.getEmotionalProfile(userId)
-    const interventions: EmotionalIntervention[] = []
-
-    // 基于情绪状态选择干预策略
-    if (currentEmotion.valence < -0.5) {
-      // 负面情绪干预
-      interventions.push(
-        {
-          type: "color_therapy",
-          config: {
-            colors: ["#FFE4B5", "#98FB98", "#87CEEB"], // 温暖、舒缓的颜色
-            transition: "gentle",
-            duration: 300000, // 5分钟
-          },
-          duration: 300000,
-          intensity: 0.7,
-        },
-        {
-          type: "breathing_guide",
-          config: {
-            pattern: "4-7-8", // 吸气4秒，屏息7秒，呼气8秒
-            cycles: 10,
-            visualization: "ocean_waves",
-          },
-          duration: 180000, // 3分钟
-          intensity: 0.8,
-        },
-      )
-    }
-
-    if (currentEmotion.arousal > 0.8) {
-      // 高唤醒度干预
-      interventions.push({
-        type: "music_therapy",
-        config: {
-          genre: "ambient",
-          tempo: "slow",
-          volume: 0.3,
-          binaural: true,
-          frequency: "alpha", // 8-12Hz，促进放松
-        },
-        duration: 600000, // 10分钟
-        intensity: 0.6,
-      })
-    }
-
-    if (currentEmotion.primary === "stress" || currentEmotion.primary === "anxiety") {
-      interventions.push({
-        type: "content_adjustment",
-        config: {
-          complexity: "reduced",
-          pace: "slower",
-          supportLevel: "increased",
-          positiveFraming: true,
-        },
-        duration: 1800000, // 30分钟
-        intensity: 0.9,
-      })
-    }
-
-    // 调整交互风格
-    interventions.push({
-      type: "interaction_style",
-      config: {
-        tone: this.getAdaptiveTone(currentEmotion, targetEmotion),
-        responsiveness: this.getAdaptiveResponsiveness(currentEmotion),
-        guidance: this.getAdaptiveGuidance(currentEmotion),
-        feedback: this.getAdaptiveFeedback(currentEmotion),
-      },
-      duration: 3600000, // 1小时
-      intensity: 0.5,
-    })
-
-    // 记录干预历史
-    this.interventionHistory.set(userId, [...(this.interventionHistory.get(userId) || []), ...interventions])
-
-    // 估算成功概率
-    const successProbability = this.calculateInterventionSuccess(profile, interventions, currentEmotion)
-
-    return {
-      interventions,
-      estimatedDuration: Math.max(...interventions.map((i) => i.duration)),
-      successProbability,
-      followUpActions: await this.generateFollowUpActions(currentEmotion, targetEmotion),
-    }
-  }
-
-  // 情绪感知对话生成
-  static async generateEmotionallyAwareResponse(
-    input: string,
-    userEmotion: any,
-    conversationHistory: any[],
-  ): Promise<{
-    response: string
-    emotionalTone: string
-    adaptations: string[]
-    supportLevel: number
-    followUpQuestions: string[]
-  }> {
-    try {
-      const { text } = await generateText({
-        model: openai("gpt-4o"),
-        system: `你是具备高度情绪智能的AI助手。你能够感知用户的情绪状态并相应调整回应方式。
-
-用户当前情绪状态:
-- 主要情绪: ${userEmotion.primary}
-- 情绪强度: ${userEmotion.intensity}
-- 情绪价值: ${userEmotion.valence}
-- 唤醒度: ${userEmotion.arousal}
-
-对话历史: ${JSON.stringify(conversationHistory.slice(-3))}
-
-请基于用户情绪状态调整你的回应:
-1. 如果用户情绪低落，提供温暖支持和鼓励
-2. 如果用户焦虑，提供冷静和安抚
-3. 如果用户兴奋，匹配其能量水平
-4. 如果用户愤怒，保持冷静和理解
-5. 始终展现同理心和专业性
-
-回应要自然、真诚，避免过度技术化的语言。`,
-        prompt: input,
-        temperature: 0.7 + userEmotion.intensity * 0.2, // 根据情绪强度调整创造性
-      })
-
-      const adaptations = this.identifyEmotionalAdaptations(text, userEmotion)
-      const supportLevel = this.calculateSupportLevel(userEmotion)
-      const followUpQuestions = await this.generateEmotionalFollowUp(userEmotion, text)
-
-      return {
-        response: text,
-        emotionalTone: this.determineResponseTone(userEmotion),
-        adaptations,
-        supportLevel,
-        followUpQuestions,
-      }
-    } catch (error) {
-      console.error("情绪感知回应生成失败:", error)
-      return {
-        response: "我理解您现在的感受。让我们一起找到最好的解决方案。",
-        emotionalTone: "supportive",
-        adaptations: ["empathetic_language"],
-        supportLevel: 0.8,
-        followUpQuestions: ["您希望我如何帮助您？"],
-      }
-    }
-  }
-
-  // 情绪学习和适应
-  static async learnFromEmotionalFeedback(
-    userId: string,
-    intervention: EmotionalIntervention,
-    feedback: {
-      effectiveness: number // 1-10
-      comfort: number // 1-10
-      preference: number // 1-10
-      comments?: string
-    },
-  ): Promise<void> {
-    const profile = this.getEmotionalProfile(userId)
-
-    // 记录适应历史
-    const adaptationRecord: AdaptationRecord = {
-      timestamp: Date.now(),
-      originalEmotion: "", // 从上下文获取
-      targetEmotion: "", // 从上下文获取
-      intervention: intervention.type,
-      success: feedback.effectiveness > 6,
-      feedback: (feedback.effectiveness + feedback.comfort + feedback.preference) / 3,
-    }
-
-    profile.adaptationHistory.push(adaptationRecord)
-
-    // 更新情绪偏好
-    if (feedback.effectiveness > 7) {
-      const existingPreference = profile.preferences.find((p) => p.category === intervention.type)
-
-      if (existingPreference) {
-        existingPreference.strength += 0.1
-      } else {
-        profile.preferences.push({
-          category: intervention.type,
-          preference: "effective",
-          emotionalContext: "", // 从上下文获取
-          strength: 0.7,
-        })
-      }
-    }
-
-    // 更新用户档案
-    profile.lastUpdated = Date.now()
-    this.emotionalProfiles.set(userId, profile)
-
-    // 使用机器学习优化未来干预
-    await this.optimizeInterventionModel(userId, adaptationRecord)
-  }
-
-  // 群体情绪分析
-  static async analyzeGroupEmotion(
-    participants: {
-      userId: string
-      emotion: any
-      influence: number
-    }[],
-  ): Promise<{
-    groupMood: string
-    dominantEmotions: string[]
-    emotionalDynamics: any
-    recommendations: string[]
-    interventionNeeded: boolean
-  }> {
-    const emotions = participants.map((p) => p.emotion)
-    const influences = participants.map((p) => p.influence)
-
-    // 计算加权平均情绪
-    const weightedEmotions = emotions.map((emotion, index) => ({
-      ...emotion,
-      weight: influences[index],
-    }))
-
-    const groupEmotion = this.calculateGroupEmotion(weightedEmotions)
-    const dynamics = this.analyzeEmotionalDynamics(participants)
-
-    return {
-      groupMood: groupEmotion.primary,
-      dominantEmotions: groupEmotion.secondary,
-      emotionalDynamics: dynamics,
-      recommendations: await this.generateGroupRecommendations(groupEmotion, dynamics),
-      interventionNeeded: groupEmotion.valence < -0.3 || dynamics.conflict > 0.7,
-    }
-  }
-
-  // 私有方法实现
-  private static async analyzeTextEmotion(text: string): Promise<any> {
-    try {
-      const { text: result } = await generateText({
-        model: openai("gpt-4o"),
-        system: `分析文本的情绪状态，返回JSON格式：
-{
-  "primary": "主要情绪",
-  "secondary": ["次要情绪"],
-  "intensity": 0.0-1.0,
-  "valence": -1.0到1.0,
-  "arousal": 0.0-1.0,
-  "confidence": 0.0-1.0
-}`,
-        prompt: `分析以下文本的情绪：${text}`,
-      })
-
-      return JSON.parse(result)
-    } catch (error) {
-      return {
-        primary: "neutral",
-        secondary: [],
-        intensity: 0.5,
-        valence: 0,
-        arousal: 0.5,
-        confidence: 0.3,
-      }
-    }
-  }
-
-  private static async analyzeVoiceEmotion(voiceData: Float32Array): Promise<any> {
-    // 语音情绪分析实现（模拟）
-    const pitch = this.calculatePitch(voiceData)
-    const energy = this.calculateEnergy(voiceData)
-    const tempo = this.calculateTempo(voiceData)
-
-    let primary = "neutral"
-    let valence = 0
-    let arousal = 0.5
-
-    if (pitch > 200 && energy > 0.7) {
-      primary = "excitement"
-      valence = 0.8
-      arousal = 0.9
-    } else if (pitch < 100 && energy < 0.3) {
-      primary = "sadness"
-      valence = -0.6
-      arousal = 0.2
-    } else if (tempo > 150 && energy > 0.6) {
-      primary = "anxiety"
-      valence = -0.3
-      arousal = 0.8
     }
 
     return {
-      primary,
+      primary: detectedEmotion,
       secondary: [],
-      intensity: energy,
-      valence,
-      arousal,
-      confidence: 0.7,
+      intensity: Math.min(maxScore / 3, 1),
+      confidence: maxScore > 0 ? 0.7 : 0.5,
+      valence: this.getEmotionValence(detectedEmotion),
+      arousal: this.getEmotionArousal(detectedEmotion),
+      timestamp: Date.now(),
+      source: "text",
     }
   }
 
-  private static async analyzeFacialEmotion(imageData: ImageData): Promise<any> {
-    // 面部表情分析实现（模拟）
-    // 实际实现会使用计算机视觉库
+  private async analyzeVoiceEmotion(audioData: ArrayBuffer): Promise<EmotionData> {
+    // 语音情绪分析的简化实现
+    // 实际应用中需要使用音频处理库和机器学习模型
+
     return {
       primary: "neutral",
       secondary: [],
       intensity: 0.5,
+      confidence: 0.6,
       valence: 0,
       arousal: 0.5,
-      confidence: 0.6,
+      timestamp: Date.now(),
+      source: "voice",
     }
   }
 
-  private static async analyzePhysiologicalEmotion(data: any): Promise<any> {
-    let primary = "neutral"
-    let valence = 0
-    let arousal = 0.5
+  private async analyzeFacialEmotion(videoFrame: ImageData): Promise<EmotionData> {
+    // 面部表情分析的简化实现
+    // 实际应用中需要使用计算机视觉库
 
-    if (data.heartRate > 100) {
-      arousal += 0.3
-      if (data.skinConductance > 0.7) {
-        primary = "stress"
-        valence = -0.4
-      } else {
-        primary = "excitement"
-        valence = 0.6
-      }
+    return {
+      primary: "neutral",
+      secondary: [],
+      intensity: 0.5,
+      confidence: 0.7,
+      valence: 0,
+      arousal: 0.5,
+      timestamp: Date.now(),
+      source: "facial",
     }
+  }
 
-    if (data.breathing > 20) {
-      arousal += 0.2
-      if (primary === "neutral") {
-        primary = "anxiety"
+  private async analyzePhysiologicalEmotion(physiological: any): Promise<EmotionData> {
+    // 基于生理信号的情绪分析
+    let arousal = 0.5
+    let valence = 0
+    let primary: EmotionData["primary"] = "neutral"
+
+    if (physiological.heartRate) {
+      // 心率分析
+      if (physiological.heartRate > 100) {
+        arousal = Math.min((physiological.heartRate - 60) / 100, 1)
+        primary = arousal > 0.8 ? "fear" : "surprise"
+      } else if (physiological.heartRate < 60) {
+        arousal = 0.3
         valence = -0.3
+        primary = "sadness"
+      }
+    }
+
+    if (physiological.skinConductance) {
+      // 皮肤电导分析
+      if (physiological.skinConductance > 10) {
+        arousal = Math.max(arousal, 0.8)
+        primary = "anger"
       }
     }
 
@@ -547,427 +496,326 @@ export class EmotionAIEngine {
       primary,
       secondary: [],
       intensity: arousal,
+      confidence: 0.6,
       valence,
-      arousal: Math.min(arousal, 1.0),
-      confidence: 0.8,
+      arousal,
+      timestamp: Date.now(),
+      source: "physiological",
     }
   }
 
-  private static async analyzeBehavioralEmotion(data: any): Promise<any> {
-    let primary = "neutral"
-    let valence = 0
-    let arousal = 0.5
-
-    if (data.errorRate > 0.1) {
-      primary = "frustration"
-      valence = -0.5
-      arousal = 0.7
-    }
-
-    if (data.scrollSpeed > 1000) {
-      arousal += 0.2
-      if (primary === "neutral") {
-        primary = "impatience"
-        valence = -0.2
-      }
-    }
-
-    if (data.dwellTime < 1000) {
-      arousal += 0.1
-    }
-
-    return {
-      primary,
-      secondary: [],
-      intensity: arousal,
-      valence,
-      arousal: Math.min(arousal, 1.0),
-      confidence: 0.4,
-    }
-  }
-
-  private static fuseEmotionalAnalyses(analyses: any[]): any {
+  private fuseEmotionData(analyses: EmotionData[]): EmotionData {
     if (analyses.length === 0) {
-      return {
-        primaryEmotion: "neutral",
-        secondaryEmotions: [],
-        intensity: 0.5,
-        confidence: 0.3,
-        valence: 0,
-        arousal: 0.5,
-        context: {},
-      }
+      return this.getDefaultEmotion()
     }
 
-    // 加权融合
-    const totalWeight = analyses.reduce((sum, a) => sum + a.weight, 0)
-
-    const weightedValence = analyses.reduce((sum, a) => sum + a.valence * a.weight, 0) / totalWeight
-    const weightedArousal = analyses.reduce((sum, a) => sum + a.arousal * a.weight, 0) / totalWeight
-    const weightedIntensity = analyses.reduce((sum, a) => sum + a.intensity * a.weight, 0) / totalWeight
-    const weightedConfidence = analyses.reduce((sum, a) => sum + a.confidence * a.weight, 0) / totalWeight
-
-    // 选择置信度最高的主要情绪
-    const bestAnalysis = analyses.reduce((best, current) => (current.confidence > best.confidence ? current : best))
-
-    return {
-      primaryEmotion: bestAnalysis.primary,
-      secondaryEmotions: analyses.flatMap((a) => a.secondary).slice(0, 3),
-      intensity: weightedIntensity,
-      confidence: weightedConfidence,
-      valence: weightedValence,
-      arousal: weightedArousal,
-      context: { fusedFrom: analyses.length },
-    }
-  }
-
-  private static async generateEmotionalRecommendations(emotion: any): Promise<string[]> {
-    const recommendations = []
-
-    if (emotion.valence < -0.3) {
-      recommendations.push("建议进行情绪调节活动")
-      recommendations.push("考虑休息或放松")
+    if (analyses.length === 1) {
+      return analyses[0]
     }
 
-    if (emotion.arousal > 0.8) {
-      recommendations.push("建议进行深呼吸练习")
-      recommendations.push("降低环境刺激")
+    // 加权融合多模态分析结果
+    const weights = {
+      text: 0.3,
+      voice: 0.25,
+      facial: 0.3,
+      physiological: 0.15,
     }
 
-    if (emotion.intensity > 0.8) {
-      recommendations.push("建议暂停当前活动")
-      recommendations.push("寻求情绪支持")
-    }
+    let totalWeight = 0
+    let weightedValence = 0
+    let weightedArousal = 0
+    let weightedIntensity = 0
+    const emotionCounts = new Map<string, number>()
 
-    return recommendations
-  }
+    analyses.forEach((analysis) => {
+      const weight = weights[analysis.source] || 0.25
+      totalWeight += weight
 
-  private static getEmotionalProfile(userId: string): EmotionalProfile {
-    if (!this.emotionalProfiles.has(userId)) {
-      this.emotionalProfiles.set(userId, {
-        userId,
-        dominantEmotions: ["neutral"],
-        emotionalPatterns: [],
-        triggers: [],
-        preferences: [],
-        adaptationHistory: [],
-        lastUpdated: Date.now(),
-      })
-    }
-    return this.emotionalProfiles.get(userId)!
-  }
+      weightedValence += analysis.valence * weight
+      weightedArousal += analysis.arousal * weight
+      weightedIntensity += analysis.intensity * weight
 
-  private static getDefaultColorScheme(emotion: any): MoodBasedInterface["colorScheme"] {
-    if (emotion.valence < -0.3) {
-      return {
-        primary: "#6B73FF",
-        secondary: "#9B59B6",
-        accent: "#3498DB",
-        background: "#F8F9FA",
-        text: "#2C3E50",
-      }
-    } else if (emotion.arousal > 0.7) {
-      return {
-        primary: "#E74C3C",
-        secondary: "#F39C12",
-        accent: "#E67E22",
-        background: "#FDF2E9",
-        text: "#2C3E50",
-      }
-    } else {
-      return {
-        primary: "#27AE60",
-        secondary: "#2ECC71",
-        accent: "#1ABC9C",
-        background: "#E8F8F5",
-        text: "#2C3E50",
-      }
-    }
-  }
-
-  private static getDefaultAnimations(emotion: any): MoodBasedInterface["animations"] {
-    if (emotion.arousal > 0.7) {
-      return {
-        speed: "fast",
-        type: "energetic",
-        intensity: 0.8,
-      }
-    } else if (emotion.valence < -0.3) {
-      return {
-        speed: "slow",
-        type: "gentle",
-        intensity: 0.3,
-      }
-    } else {
-      return {
-        speed: "normal",
-        type: "gentle",
-        intensity: 0.5,
-      }
-    }
-  }
-
-  private static getDefaultLayout(emotion: any): MoodBasedInterface["layout"] {
-    if (emotion.arousal > 0.7) {
-      return {
-        spacing: "compact",
-        elements: "minimal",
-        focus: "single",
-      }
-    } else {
-      return {
-        spacing: "normal",
-        elements: "standard",
-        focus: "multi",
-      }
-    }
-  }
-
-  private static getDefaultInteractions(emotion: any): MoodBasedInterface["interactions"] {
-    if (emotion.valence < -0.3) {
-      return {
-        feedback: "pronounced",
-        responsiveness: 0.9,
-        guidance: "detailed",
-      }
-    } else {
-      return {
-        feedback: "normal",
-        responsiveness: 0.7,
-        guidance: "helpful",
-      }
-    }
-  }
-
-  private static getFallbackInterface(emotion: any): MoodBasedInterface {
-    return {
-      colorScheme: this.getDefaultColorScheme(emotion),
-      animations: this.getDefaultAnimations(emotion),
-      layout: this.getDefaultLayout(emotion),
-      interactions: this.getDefaultInteractions(emotion),
-    }
-  }
-
-  private static getAdaptiveTone(currentEmotion: any, targetEmotion: string): string {
-    if (currentEmotion.valence < -0.5) return "supportive"
-    if (currentEmotion.arousal > 0.8) return "calming"
-    if (targetEmotion === "confidence") return "encouraging"
-    return "balanced"
-  }
-
-  private static getAdaptiveResponsiveness(emotion: any): number {
-    return Math.max(0.3, 1.0 - emotion.arousal * 0.5)
-  }
-
-  private static getAdaptiveGuidance(emotion: any): string {
-    if (emotion.valence < -0.3) return "detailed"
-    if (emotion.arousal > 0.7) return "minimal"
-    return "helpful"
-  }
-
-  private static getAdaptiveFeedback(emotion: any): string {
-    if (emotion.intensity > 0.7) return "pronounced"
-    if (emotion.valence < -0.3) return "pronounced"
-    return "normal"
-  }
-
-  private static calculateInterventionSuccess(
-    profile: EmotionalProfile,
-    interventions: EmotionalIntervention[],
-    currentEmotion: any,
-  ): number {
-    let baseSuccess = 0.6
-
-    // 基于历史成功率调整
-    const relevantHistory = profile.adaptationHistory.filter((record) =>
-      interventions.some((i) => i.type === record.intervention),
-    )
-
-    if (relevantHistory.length > 0) {
-      const avgSuccess = relevantHistory.reduce((sum, r) => sum + (r.success ? 1 : 0), 0) / relevantHistory.length
-      baseSuccess = (baseSuccess + avgSuccess) / 2
-    }
-
-    // 基于情绪强度调整
-    if (currentEmotion.intensity > 0.8) {
-      baseSuccess *= 0.8 // 强烈情绪更难干预
-    }
-
-    return Math.min(baseSuccess, 0.95)
-  }
-
-  private static async generateFollowUpActions(currentEmotion: any, targetEmotion: string): Promise<string[]> {
-    const actions = []
-
-    if (currentEmotion.valence < -0.3) {
-      actions.push("安排后续情绪检查", "提供额外支持资源")
-    }
-
-    if (targetEmotion === "calm") {
-      actions.push("监控压力水平", "建议放松活动")
-    }
-
-    if (targetEmotion === "confident") {
-      actions.push("提供成就确认", "设置积极目标")
-    }
-
-    return actions
-  }
-
-  private static identifyEmotionalAdaptations(response: string, emotion: any): string[] {
-    const adaptations = []
-
-    if (response.includes("理解") || response.includes("感受")) {
-      adaptations.push("empathetic_language")
-    }
-
-    if (emotion.valence < -0.3 && (response.includes("支持") || response.includes("帮助"))) {
-      adaptations.push("supportive_tone")
-    }
-
-    if (emotion.arousal > 0.7 && response.length < 200) {
-      adaptations.push("concise_response")
-    }
-
-    return adaptations
-  }
-
-  private static calculateSupportLevel(emotion: any): number {
-    let support = 0.5
-
-    if (emotion.valence < -0.3) support += 0.3
-    if (emotion.intensity > 0.7) support += 0.2
-    if (emotion.primary === "anxiety" || emotion.primary === "stress") support += 0.2
-
-    return Math.min(support, 1.0)
-  }
-
-  private static async generateEmotionalFollowUp(emotion: any, response: string): Promise<string[]> {
-    const questions = []
-
-    if (emotion.valence < -0.3) {
-      questions.push("您现在感觉如何？", "还有什么我可以帮助您的吗？")
-    }
-
-    if (emotion.arousal > 0.7) {
-      questions.push("您希望我们放慢节奏吗？", "需要休息一下吗？")
-    }
-
-    return questions.slice(0, 2)
-  }
-
-  private static determineResponseTone(emotion: any): string {
-    if (emotion.valence < -0.5) return "supportive"
-    if (emotion.arousal > 0.8) return "calming"
-    if (emotion.primary === "joy") return "enthusiastic"
-    return "balanced"
-  }
-
-  private static async optimizeInterventionModel(userId: string, record: AdaptationRecord): Promise<void> {
-    // 机器学习模型优化（简化实现）
-    console.log(`优化用户 ${userId} 的干预模型，基于记录:`, record)
-  }
-
-  private static calculateGroupEmotion(weightedEmotions: any[]): any {
-    const totalWeight = weightedEmotions.reduce((sum, e) => sum + e.weight, 0)
-
-    const avgValence = weightedEmotions.reduce((sum, e) => sum + e.valence * e.weight, 0) / totalWeight
-    const avgArousal = weightedEmotions.reduce((sum, e) => sum + e.arousal * e.weight, 0) / totalWeight
-
-    // 确定主导情绪
-    const emotionCounts = new Map()
-    weightedEmotions.forEach((e) => {
-      const count = emotionCounts.get(e.primary) || 0
-      emotionCounts.set(e.primary, count + e.weight)
+      emotionCounts.set(analysis.primary, (emotionCounts.get(analysis.primary) || 0) + weight)
     })
 
-    const primary = Array.from(emotionCounts.entries()).sort((a, b) => b[1] - a[1])[0][0]
+    // 找出加权后的主导情绪
+    const dominantEmotion = Array.from(emotionCounts.entries()).sort(
+      ([, a], [, b]) => b - a,
+    )[0][0] as EmotionData["primary"]
 
     return {
-      primary,
-      secondary: Array.from(emotionCounts.keys()).slice(1, 4),
-      valence: avgValence,
-      arousal: avgArousal,
+      primary: dominantEmotion,
+      secondary: Array.from(emotionCounts.keys())
+        .filter((e) => e !== dominantEmotion)
+        .slice(0, 2),
+      intensity: weightedIntensity / totalWeight,
+      confidence: Math.min(totalWeight, 1),
+      valence: weightedValence / totalWeight,
+      arousal: weightedArousal / totalWeight,
+      timestamp: Date.now(),
+      source: "multimodal",
     }
   }
 
-  private static analyzeEmotionalDynamics(participants: any[]): any {
-    // 分析群体情绪动态
-    const emotions = participants.map((p) => p.emotion.primary)
-    const uniqueEmotions = new Set(emotions)
+  private applyPersonalityAdjustment(userId: string, emotion: EmotionData): EmotionData {
+    const personality = this.personalityProfiles.get(userId)
+    if (!personality) return emotion
 
-    const diversity = uniqueEmotions.size / participants.length
-    const conflict = this.calculateEmotionalConflict(participants)
-    const harmony = 1 - conflict
+    // 根据个性特征调整情绪解读
+    // 这里是简化的实现
+    const adjusted = { ...emotion }
+
+    if (personality.neuroticism > 0.7) {
+      // 高神经质的人情绪强度更高
+      adjusted.intensity = Math.min(adjusted.intensity * 1.2, 1)
+    }
+
+    if (personality.extraversion < 0.3) {
+      // 内向的人可能表达情绪更含蓄
+      adjusted.intensity = adjusted.intensity * 0.8
+    }
+
+    return adjusted
+  }
+
+  private updateEmotionHistory(userId: string, emotion: EmotionData): void {
+    const history = this.emotionHistory.get(userId) || []
+    history.push(emotion)
+
+    // 保持最近1000条记录
+    if (history.length > 1000) {
+      history.shift()
+    }
+
+    this.emotionHistory.set(userId, history)
+  }
+
+  private async checkForIntervention(userId: string, emotion: EmotionData): Promise<void> {
+    // 检查是否需要情绪干预
+    const needsIntervention =
+      emotion.intensity > 0.8 ||
+      emotion.valence < -0.7 ||
+      (emotion.primary === "anger" && emotion.intensity > 0.6) ||
+      (emotion.primary === "fear" && emotion.intensity > 0.5)
+
+    if (needsIntervention) {
+      const intervention = await this.createIntervention(userId, emotion)
+      this.startEmotionalIntervention(userId, intervention)
+    }
+  }
+
+  private async createIntervention(userId: string, emotion: EmotionData): Promise<EmotionalIntervention> {
+    const interventionType = this.selectInterventionType(emotion)
+    let config: any
+
+    switch (interventionType) {
+      case "color_therapy":
+        config = await this.generateColorTherapy(emotion)
+        break
+      case "breathing":
+        config = await this.generateBreathingExercise(emotion)
+        break
+      case "music":
+        config = await this.generateMusicTherapy(emotion)
+        break
+      default:
+        config = {}
+    }
 
     return {
-      diversity,
-      conflict,
+      id: `intervention_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      type: interventionType,
+      trigger: emotion,
+      config,
+      effectiveness: 0.5, // 初始值，会根据用户反馈调整
+      lastUsed: Date.now(),
+      userFeedback: [],
+    }
+  }
+
+  private selectInterventionType(emotion: EmotionData): EmotionalIntervention["type"] {
+    if (emotion.arousal > 0.8) {
+      return "breathing" // 高激活状态优先使用呼吸练习
+    } else if (emotion.valence < -0.5) {
+      return "color_therapy" // 负面情绪使用色彩疗法
+    } else if (emotion.intensity > 0.7) {
+      return "music" // 强烈情绪使用音乐疗法
+    } else {
+      return "mindfulness" // 默认使用正念练习
+    }
+  }
+
+  private calculateEmotionalDynamics(
+    participants: Array<{ userId: string; emotion: EmotionData }>,
+  ): GroupEmotionState["emotionalDynamics"] {
+    const emotions = participants.map((p) => p.emotion)
+
+    // 计算情绪和谐度
+    const valences = emotions.map((e) => e.valence)
+    const arousals = emotions.map((e) => e.arousal)
+
+    const valenceVariance = this.calculateVariance(valences)
+    const arousalVariance = this.calculateVariance(arousals)
+    const harmony = 1 - Math.min((valenceVariance + arousalVariance) / 2, 1)
+
+    // 计算群体能量
+    const avgArousal = arousals.reduce((a, b) => a + b, 0) / arousals.length
+    const energy = avgArousal
+
+    // 计算稳定性
+    const stability = 1 - Math.max(valenceVariance, arousalVariance)
+
+    // 分析趋势
+    const emotionCounts = new Map<string, number>()
+    emotions.forEach((e) => {
+      emotionCounts.set(e.primary, (emotionCounts.get(e.primary) || 0) + 1)
+    })
+
+    const trends = Array.from(emotionCounts.entries()).map(([emotion, count]) => ({
+      emotion,
+      direction: count > participants.length / 2 ? "rising" : ("falling" as const),
+      strength: count / participants.length,
+    }))
+
+    return {
       harmony,
-      polarization: this.calculatePolarization(participants),
+      energy,
+      stability,
+      trends,
     }
   }
 
-  private static calculateEmotionalConflict(participants: any[]): number {
-    let conflict = 0
-    const n = participants.length
+  private calculateEmotionalInfluence(
+    userId: string,
+    participants: Array<{ userId: string; emotion: EmotionData }>,
+  ): number {
+    // 简化的影响力计算
+    // 实际应用中应该考虑历史数据、社交网络位置等因素
+    const userEmotion = participants.find((p) => p.userId === userId)?.emotion
+    if (!userEmotion) return 0
 
-    for (let i = 0; i < n; i++) {
-      for (let j = i + 1; j < n; j++) {
-        const diff = Math.abs(participants[i].emotion.valence - participants[j].emotion.valence)
-        conflict += diff
-      }
-    }
-
-    return conflict / ((n * (n - 1)) / 2)
+    // 情绪强度高的人影响力更大
+    return Math.min(userEmotion.intensity * 1.2, 1)
   }
 
-  private static calculatePolarization(participants: any[]): number {
-    const valences = participants.map((p) => p.emotion.valence)
-    const mean = valences.reduce((sum, v) => sum + v, 0) / valences.length
-    const variance = valences.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / valences.length
+  private generateGroupRecommendations(
+    averageEmotion: EmotionData,
+    dynamics: GroupEmotionState["emotionalDynamics"],
+  ): string[] {
+    const recommendations: string[] = []
 
-    return Math.sqrt(variance)
-  }
-
-  private static async generateGroupRecommendations(groupEmotion: any, dynamics: any): Promise<string[]> {
-    const recommendations = []
-
-    if (dynamics.conflict > 0.7) {
-      recommendations.push("建议进行团队情绪调节", "考虑分组活动")
+    if (dynamics.harmony < 0.5) {
+      recommendations.push("群体情绪不够和谐，建议进行团队建设活动")
     }
 
-    if (groupEmotion.valence < -0.3) {
-      recommendations.push("提供团队支持", "安排积极活动")
+    if (dynamics.energy < 0.3) {
+      recommendations.push("群体能量较低，建议安排激励性活动或休息")
     }
 
-    if (dynamics.diversity < 0.3) {
-      recommendations.push("鼓励多元化表达", "创造安全空间")
+    if (averageEmotion.valence < -0.3) {
+      recommendations.push("群体情绪偏负面，建议关注成员心理健康")
+    }
+
+    if (dynamics.stability < 0.4) {
+      recommendations.push("群体情绪波动较大，建议提供稳定的支持环境")
     }
 
     return recommendations
   }
 
-  // 音频分析辅助方法
-  private static calculatePitch(audioData: Float32Array): number {
-    // 简化的基频检测
-    let sum = 0
-    for (let i = 0; i < audioData.length; i++) {
-      sum += Math.abs(audioData[i])
+  private getDefaultEmotion(): EmotionData {
+    return {
+      primary: "neutral",
+      secondary: [],
+      intensity: 0.5,
+      confidence: 0.5,
+      valence: 0,
+      arousal: 0.5,
+      timestamp: Date.now(),
+      source: "multimodal",
     }
-    return (sum / audioData.length) * 440 // 模拟基频
   }
 
-  private static calculateEnergy(audioData: Float32Array): number {
-    let energy = 0
-    for (let i = 0; i < audioData.length; i++) {
-      energy += audioData[i] * audioData[i]
+  private getEmotionValence(emotion: EmotionData["primary"]): number {
+    const valenceMap = {
+      joy: 0.8,
+      surprise: 0.3,
+      neutral: 0,
+      disgust: -0.4,
+      fear: -0.6,
+      anger: -0.7,
+      sadness: -0.8,
     }
-    return Math.sqrt(energy / audioData.length)
+    return valenceMap[emotion] || 0
   }
 
-  private static calculateTempo(audioData: Float32Array): number {
-    // 简化的节拍检测
-    return 120 + Math.random() * 60 // 模拟BPM
+  private getEmotionArousal(emotion: EmotionData["primary"]): number {
+    const arousalMap = {
+      anger: 0.9,
+      fear: 0.8,
+      surprise: 0.8,
+      joy: 0.7,
+      disgust: 0.5,
+      neutral: 0.5,
+      sadness: 0.2,
+    }
+    return arousalMap[emotion] || 0.5
+  }
+
+  private getOptimalTextColor(backgroundColor: string): string {
+    // 简化的文本颜色选择逻辑
+    // 实际应用中应该计算对比度
+    const lightColors = ["#FFFACD", "#F0F8FF", "#FFE4E1", "#F8F0FF", "#F0FFF0", "#FFFAF0", "#F5F5F5"]
+    return lightColors.includes(backgroundColor) ? "#333333" : "#FFFFFF"
+  }
+
+  private getContentTone(emotion: EmotionData): string {
+    if (emotion.valence < -0.5) return "supportive"
+    if (emotion.valence > 0.5) return "enthusiastic"
+    if (emotion.arousal > 0.7) return "calming"
+    return "neutral"
+  }
+
+  private calculateVariance(values: number[]): number {
+    const mean = values.reduce((a, b) => a + b, 0) / values.length
+    const squaredDiffs = values.map((value) => Math.pow(value - mean, 2))
+    return squaredDiffs.reduce((a, b) => a + b, 0) / values.length
+  }
+
+  private calculateTrend(values: number[]): "rising" | "falling" | "stable" {
+    if (values.length < 2) return "stable"
+
+    const first = values.slice(0, Math.floor(values.length / 2))
+    const second = values.slice(Math.floor(values.length / 2))
+
+    const firstAvg = first.reduce((a, b) => a + b, 0) / first.length
+    const secondAvg = second.reduce((a, b) => a + b, 0) / second.length
+
+    const diff = secondAvg - firstAvg
+
+    if (Math.abs(diff) < 0.1) return "stable"
+    return diff > 0 ? "rising" : "falling"
+  }
+
+  private calculateStability(values: number[]): number {
+    return 1 - this.calculateVariance(values)
+  }
+
+  private getDominantEmotions(emotions: EmotionData[]): Array<{ emotion: string; percentage: number }> {
+    const counts = new Map<string, number>()
+    emotions.forEach((e) => {
+      counts.set(e.primary, (counts.get(e.primary) || 0) + 1)
+    })
+
+    return Array.from(counts.entries())
+      .map(([emotion, count]) => ({
+        emotion,
+        percentage: (count / emotions.length) * 100,
+      }))
+      .sort((a, b) => b.percentage - a.percentage)
+      .slice(0, 3)
   }
 }
+
+// 全局实例
+export const emotionAI = new EmotionAI()

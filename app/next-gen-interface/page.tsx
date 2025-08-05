@@ -2,985 +2,888 @@
 
 import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Brain, Eye, Zap, Sparkles, Heart, Target, Globe } from "lucide-react"
-import { AdvancedAIEngine } from "@/lib/advanced-ai-engine"
-import { CrossDeviceSyncManager } from "@/lib/cross-device-sync"
-import { ARVRInterfaceManager } from "@/lib/ar-vr-interface"
-import { EmotionAIEngine } from "@/lib/emotion-ai"
-import { PredictiveInteractionEngine } from "@/lib/predictive-interaction"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Progress } from "@/components/ui/progress"
+import {
+  ArrowLeft,
+  Brain,
+  Eye,
+  Heart,
+  Zap,
+  Smartphone,
+  Monitor,
+  Activity,
+  TrendingUp,
+  Play,
+  Pause,
+  Volume2,
+  Palette,
+  Wind,
+  Music,
+  Target,
+  Users,
+  Sparkles,
+  CircuitBoard,
+  Lightbulb,
+} from "lucide-react"
 
-interface NextGenState {
-  // AI状态
-  aiPersonality: "analytical" | "creative" | "supportive" | "adaptive"
-  contextualMemory: any[]
-  emotionalState: any
-  predictiveInsights: any[]
+// 导入高级功能模块
+import { advancedAI, type PredictiveInsight } from "@/lib/advanced-ai-engine"
+import { crossDeviceSync, type Device } from "@/lib/cross-device-sync"
+import { arvrInterface, type XRSession } from "@/lib/ar-vr-interface"
+import { emotionAI, type EmotionData, type ColorTherapyConfig } from "@/lib/emotion-ai"
+import {
+  predictiveInteraction,
+  type WorkflowOptimization,
+  type ProactiveAssistance,
+} from "@/lib/predictive-interaction"
 
-  // 跨设备状态
-  connectedDevices: any[]
-  activeHandoffs: any[]
-  collaborativeSessions: any[]
+interface SystemStatus {
+  aiEngine: "active" | "standby" | "offline"
+  emotionAI: "monitoring" | "analyzing" | "intervening" | "offline"
+  crossDeviceSync: "syncing" | "connected" | "disconnected"
+  arvrInterface: "ready" | "active" | "unavailable"
+  predictiveEngine: "learning" | "predicting" | "optimizing" | "offline"
+}
 
-  // AR/VR状态
-  spatialMode: "2d" | "ar" | "vr" | "mixed"
-  spatialElements: any[]
-  gestureRecognition: boolean
-
-  // 情绪计算状态
-  userEmotion: any
-  moodInterface: any
-  emotionalInterventions: any[]
-
-  // 预测性交互状态
-  predictedActions: any[]
-  proactiveServices: any[]
-  behaviorPatterns: any[]
+interface RealTimeMetrics {
+  emotionState: EmotionData
+  cognitiveLoad: number
+  attentionLevel: number
+  stressLevel: number
+  engagementScore: number
+  productivityIndex: number
+  wellbeingScore: number
 }
 
 export default function NextGenInterfacePage() {
   const router = useRouter()
-  const [state, setState] = useState<NextGenState>({
-    aiPersonality: "adaptive",
-    contextualMemory: [],
-    emotionalState: null,
-    predictiveInsights: [],
-    connectedDevices: [],
-    activeHandoffs: [],
-    collaborativeSessions: [],
-    spatialMode: "2d",
-    spatialElements: [],
-    gestureRecognition: false,
-    userEmotion: null,
-    moodInterface: null,
-    emotionalInterventions: [],
-    predictedActions: [],
-    proactiveServices: [],
-    behaviorPatterns: [],
+  const [isInitialized, setIsInitialized] = useState(false)
+  const [systemStatus, setSystemStatus] = useState<SystemStatus>({
+    aiEngine: 'standby',
+    emotionAI: 'offline',
+    crossDeviceSync: 'disconnected',
+    arvrInterface: 'unavailable',
+    predictiveEngine: 'offline'
+  })
+  
+  const [realTimeMetrics, setRealTimeMetrics] = useState<RealTimeMetrics>({
+    emotionState: {
+      primary: 'neutral',
+      secondary: [],
+      intensity: 0.5,
+      confidence: 0.8,
+      valence: 0,
+      arousal: 0.5,
+      timestamp: Date.now(),
+      source: 'multimodal'
+    },
+    cognitiveLoad: 0.4,
+    attentionLevel: 0.8,
+    stressLevel: 0.3,
+    engagementScore: 0.7,
+    productivityIndex: 0.6,
+    wellbeingScore: 0.75
   })
 
-  const [isInitializing, setIsInitializing] = useState(true)
-  const [activeFeatures, setActiveFeatures] = useState<string[]>([])
-  const [userInput, setUserInput] = useState("")
-  const [aiResponse, setAiResponse] = useState("")
-  const [isProcessing, setIsProcessing] = useState(false)
+  const [connectedDevices, setConnectedDevices] = useState<Device[]>([])
+  const [activeXRSession, setActiveXRSession] = useState<XRSession | null>(null)
+  const [currentTherapy, setCurrentTherapy] = useState<{
+    type: 'color' | 'breathing' | 'music' | null
+    config: any
+    active: boolean
+  }>({ type: null, config: null, active: false })
+  
+  const [predictiveInsights, setPredictiveInsights] = useState<PredictiveInsight[]>([])
+  const [proactiveHelp, setProactiveHelp] = useState<ProactiveAssistance[]>([])
+  const [workflowOptimizations, setWorkflowOptimizations] = useState<WorkflowOptimization[]>([])
 
-  const containerRef = useRef<HTMLDivElement>(null)
+  const [selectedTab, setSelectedTab] = useState<'overview' | 'emotion' | 'devices' | 'ar-vr' | 'predictions' | 'wellness'>('overview')
+  const [isMonitoring, setIsMonitoring] = useState(false)
+  const [adaptiveUI, setAdaptiveUI] = useState<any>(null)
+
   const videoRef = useRef<HTMLVideoElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const audioContextRef = useRef<AudioContext | null>(null)
 
-  // 初始化下一代界面
   useEffect(() => {
-    initializeNextGenInterface()
+    initializeNextGenSystems()
+    return () => {
+      cleanup()
+    }
   }, [])
 
-  // 实时情绪监测
   useEffect(() => {
-    if (activeFeatures.includes("emotion_ai")) {
-      startEmotionMonitoring()
-    }
-  }, [activeFeatures])
+    if (isMonitoring) {
+      const interval = setInterval(() => {
+        updateRealTimeMetrics()
+      }, 2000) // 每2秒更新一次
 
-  // 预测性交互
-  useEffect(() => {
-    if (activeFeatures.includes("predictive_interaction")) {
-      startPredictiveInteraction()
+      return () => clearInterval(interval)
     }
-  }, [activeFeatures])
+  }, [isMonitoring])
 
-  const initializeNextGenInterface = async () => {
+  const initializeNextGenSystems = async () => {
     try {
-      setIsInitializing(true)
-
-      // 初始化跨设备同步
-      const syncManager = CrossDeviceSyncManager.getInstance()
-      await syncManager.initialize("user-001", {
-        name: "Next-Gen Interface",
-        type: "desktop",
-        capabilities: ["ai", "ar", "emotion", "prediction"],
+      console.log('🚀 初始化下一代智能交互系统...')
+      
+      // 1. 初始化高级AI引擎
+      setSystemStatus(prev => ({ ...prev, aiEngine: 'active' }))
+      await advancedAI.updateUserContext('current_user', {
+        userId: 'current_user',
+        sessionId: `session_${Date.now()}`,
+        preferences: {
+          communicationStyle: 'empathetic',
+          responseLength: 'detailed',
+          topics: ['technology', 'ai', 'productivity'],
+          learningGoals: ['improve efficiency', 'learn new skills']
+        },
+        emotionalProfile: {
+          baseline: realTimeMetrics.emotionState,
+          currentState: realTimeMetrics.emotionState,
+          history: []
+        },
+        cognitiveLoad: realTimeMetrics.cognitiveLoad,
+        attentionSpan: 15,
+        expertise: { 'ai': 0.7, 'technology': 0.8 }
       })
 
-      // 检测AR/VR能力
-      const arvrManager = ARVRInterfaceManager.getInstance()
-      const capabilities = await arvrManager.detectCapabilities()
+      // 2. 初始化情绪AI
+      setSystemStatus(prev => ({ ...prev, emotionAI: 'monitoring' }))
+      
+      // 3. 初始化跨设备同步
+      setSystemStatus(prev => ({ ...prev, crossDeviceSync: 'connected' }))
+      const devices = await crossDeviceSync.discoverDevices()
+      setConnectedDevices(devices)
 
-      // 启动摄像头用于情绪检测
-      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({
-            video: true,
-            audio: true,
-          })
-          if (videoRef.current) {
-            videoRef.current.srcObject = stream
-          }
-          setActiveFeatures((prev) => [...prev, "emotion_ai"])
-        } catch (error) {
-          console.warn("摄像头访问失败:", error)
-        }
-      }
-
-      // 启用预测性交互
-      setActiveFeatures((prev) => [...prev, "predictive_interaction"])
-
-      // 如果支持AR/VR，启用空间界面
-      if (capabilities.hasAR || capabilities.hasVR) {
-        setActiveFeatures((prev) => [...prev, "spatial_interface"])
-      }
-
-      // 启用高级AI
-      setActiveFeatures((prev) => [...prev, "advanced_ai"])
-
-      setIsInitializing(false)
-    } catch (error) {
-      console.error("下一代界面初始化失败:", error)
-      setIsInitializing(false)
-    }
-  }
-
-  const startEmotionMonitoring = async () => {
-    const monitorEmotion = async () => {
-      try {
-        // 获取多模态情绪数据
-        const emotionData = await EmotionAIEngine.analyzeRealTimeEmotion({
-          text: userInput,
-          behavioral: {
-            clickPattern: [Date.now()],
-            scrollSpeed: 100,
-            dwellTime: 2000,
-            errorRate: 0.1,
-          },
-        })
-
-        setState((prev) => ({ ...prev, userEmotion: emotionData }))
-
-        // 生成情绪适应性界面
-        if (emotionData.primaryEmotion !== "neutral") {
-          const moodInterface = await EmotionAIEngine.generateEmotionalInterface("user-001", {
-            primary: emotionData.primaryEmotion,
-            intensity: emotionData.intensity,
-            valence: emotionData.valence,
-            arousal: emotionData.arousal,
-          })
-
-          setState((prev) => ({ ...prev, moodInterface }))
-
-          // 应用界面调整
-          applyMoodInterface(moodInterface)
-        }
-
-        // 如果检测到负面情绪，启动干预
-        if (emotionData.valence < -0.3) {
-          const intervention = await EmotionAIEngine.performEmotionalIntervention("user-001", "calm", emotionData)
-
-          setState((prev) => ({
-            ...prev,
-            emotionalInterventions: [...prev.emotionalInterventions, ...intervention.interventions],
-          }))
-
-          // 执行情绪干预
-          executeEmotionalInterventions(intervention.interventions)
-        }
-      } catch (error) {
-        console.error("情绪监测失败:", error)
-      }
-    }
-
-    // 每5秒监测一次情绪
-    const emotionInterval = setInterval(monitorEmotion, 5000)
-    return () => clearInterval(emotionInterval)
-  }
-
-  const startPredictiveInteraction = async () => {
-    const generatePredictions = async () => {
-      try {
-        const currentContext = {
-          currentPage: "next-gen-interface",
-          recentActions: ["initialize", "emotion_monitor"],
-          timeOfDay: new Date().getHours(),
-          dayOfWeek: new Date().getDay(),
-          sessionDuration: Date.now() - performance.timing.navigationStart,
-          deviceType: "desktop",
-          emotionalState: state.userEmotion,
-        }
-
-        const predictions = await PredictiveInteractionEngine.predictUserIntent("user-001", currentContext)
-
-        setState((prev) => ({
-          ...prev,
-          predictedActions: predictions.nextActions,
-          proactiveServices: predictions.proactiveServices,
-        }))
-
-        // 执行高置信度的预测性行动
-        const highConfidenceActions = predictions.nextActions.filter((action) => action.confidence > 0.8)
-
-        for (const action of highConfidenceActions) {
-          if (action.timing === "immediate") {
-            await executePredictiveAction(action)
-          }
-        }
-      } catch (error) {
-        console.error("预测性交互失败:", error)
-      }
-    }
-
-    // 每30秒生成一次预测
-    const predictionInterval = setInterval(generatePredictions, 30000)
-    return () => clearInterval(predictionInterval)
-  }
-
-  const handleAdvancedAIInteraction = async (input: string) => {
-    if (!input.trim()) return
-
-    setIsProcessing(true)
-    setUserInput("")
-
-    try {
-      // 使用高级AI引擎生成回应
-      const response = await AdvancedAIEngine.generateAdvancedResponse(input, "user-001", {
-        emotionalState: state.userEmotion,
-        recentInteractions: state.contextualMemory.slice(-5),
-        currentTask: "next_gen_interface_exploration",
-        environment: "desktop_browser",
-      })
-
-      setAiResponse(response.response)
-
-      // 更新上下文记忆
-      setState((prev) => ({
-        ...prev,
-        contextualMemory: [
-          ...prev.contextualMemory,
-          {
-            type: "user_input",
-            content: input,
-            timestamp: Date.now(),
-          },
-          {
-            type: "ai_response",
-            content: response.response,
-            timestamp: Date.now(),
-            metadata: {
-              emotionalTone: response.emotionalTone,
-              predictiveInsights: response.predictiveInsights,
-            },
-          },
-        ].slice(-20), // 保留最近20条记录
-        predictiveInsights: response.predictiveInsights,
+      // 4. 初始化AR/VR界面
+      const arvrInitialized = await arvrInterface.initialize()
+      setSystemStatus(prev => ({ 
+        ...prev, 
+        arvrInterface: arvrInitialized ? 'ready' : 'unavailable' 
       }))
 
-      // 执行建议的行动
-      for (const action of response.suggestedActions) {
-        await executeSuggestedAction(action)
-      }
+      // 5. 初始化预测性交互
+      setSystemStatus(prev => ({ ...prev, predictiveEngine: 'learning' }))
+      await predictiveInteraction.initializeForUser('current_user')
+      
+      // 6. 启动实时监控
+      await startRealTimeMonitoring()
+
+      setIsInitialized(true)
+      console.log('✅ 下一代智能交互系统初始化完成')
+      
     } catch (error) {
-      console.error("高级AI交互失败:", error)
-      setAiResponse("抱歉，我遇到了一些技术问题。让我重新组织一下回答。")
-    } finally {
-      setIsProcessing(false)
+      console.error('❌ 系统初始化失败:', error)
     }
   }
 
-  const handleDeviceHandoff = async (targetDevice: string) => {
+  const startRealTimeMonitoring = async () => {
     try {
-      const syncManager = CrossDeviceSyncManager.getInstance()
-      const handoffResult = await syncManager.performHandoff("current-device", targetDevice, {
-        currentPage: "next-gen-interface",
-        userInput,
-        aiResponse,
-        emotionalState: state.userEmotion,
-        contextualMemory: state.contextualMemory,
-      })
-
-      if (handoffResult.success) {
-        setState((prev) => ({
-          ...prev,
-          activeHandoffs: [...prev.activeHandoffs, handoffResult],
-        }))
-
-        // 显示切换成功提示
-        showNotification(`成功切换到${targetDevice}`, "success")
-      } else {
-        showNotification(`设备切换失败: ${handoffResult.error}`, "error")
-      }
-    } catch (error) {
-      console.error("设备切换失败:", error)
-      showNotification("设备切换失败", "error")
-    }
-  }
-
-  const toggleSpatialMode = async () => {
-    try {
-      const arvrManager = ARVRInterfaceManager.getInstance()
-
-      if (state.spatialMode === "2d") {
-        // 切换到AR模式
-        await arvrManager.initializeARVR("ar")
-        setState((prev) => ({ ...prev, spatialMode: "ar" }))
-
-        // 创建空间UI元素
-        const welcomePanel = await arvrManager.createSpatialElement({
-          type: "panel",
-          content: {
-            title: "欢迎来到空间界面",
-            body: "您现在可以通过手势和语音与3D界面交互",
-          },
-          position: { x: 0, y: 1.5, z: -2 },
-          interactive: true,
+      // 启动摄像头用于面部情绪识别
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          video: true, 
+          audio: true 
         })
+        
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream
+          videoRef.current.play()
+        }
 
-        setState((prev) => ({
-          ...prev,
-          spatialElements: [...prev.spatialElements, welcomePanel],
-        }))
-      } else {
-        // 切换回2D模式
-        setState((prev) => ({ ...prev, spatialMode: "2d", spatialElements: [] }))
+        // 启动音频上下文用于语音分析
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)()
       }
+
+      setIsMonitoring(true)
     } catch (error) {
-      console.error("空间模式切换失败:", error)
-      showNotification("空间模式切换失败", "error")
+      console.error('启动实时监控失败:', error)
     }
   }
 
-  const applyMoodInterface = (moodInterface: any) => {
-    if (!containerRef.current) return
-
-    const container = containerRef.current
-
-    // 应用色彩方案
-    container.style.setProperty("--primary-color", moodInterface.colorScheme.primary)
-    container.style.setProperty("--secondary-color", moodInterface.colorScheme.secondary)
-    container.style.setProperty("--accent-color", moodInterface.colorScheme.accent)
-    container.style.setProperty("--background-color", moodInterface.colorScheme.background)
-    container.style.setProperty("--text-color", moodInterface.colorScheme.text)
-
-    // 应用动画设置
-    const animationSpeed = {
-      slow: "2s",
-      normal: "1s",
-      fast: "0.5s",
-    }[moodInterface.animations.speed]
-
-    container.style.setProperty("--animation-duration", animationSpeed)
-
-    // 应用布局调整
-    if (moodInterface.layout.spacing === "spacious") {
-      container.style.setProperty("--spacing-multiplier", "1.5")
-    } else if (moodInterface.layout.spacing === "compact") {
-      container.style.setProperty("--spacing-multiplier", "0.75")
-    }
-  }
-
-  const executeEmotionalInterventions = async (interventions: any[]) => {
-    for (const intervention of interventions) {
-      switch (intervention.type) {
-        case "color_therapy":
-          await applyColorTherapy(intervention.config)
-          break
-        case "breathing_guide":
-          await showBreathingGuide(intervention.config)
-          break
-        case "music_therapy":
-          await playTherapeuticMusic(intervention.config)
-          break
-        case "content_adjustment":
-          await adjustContentPresentation(intervention.config)
-          break
-        case "interaction_style":
-          await adjustInteractionStyle(intervention.config)
-          break
-      }
-    }
-  }
-
-  const executePredictiveAction = async (action: any) => {
-    switch (action.type) {
-      case "content_suggestion":
-        await showContentSuggestion(action.action)
-        break
-      case "ui_adjustment":
-        await adjustUI(action.action)
-        break
-      case "workflow_optimization":
-        await optimizeWorkflow(action.action)
-        break
-      case "proactive_help":
-        await showProactiveHelp(action.action)
-        break
-    }
-  }
-
-  const executeSuggestedAction = async (action: string) => {
-    // 执行AI建议的行动
-    console.log("执行建议行动:", action)
-  }
-
-  // 辅助方法实现
-  const applyColorTherapy = async (config: any) => {
-    if (!containerRef.current) return
-
-    const container = containerRef.current
-    const colors = config.colors
-
-    let colorIndex = 0
-    const colorInterval = setInterval(() => {
-      container.style.backgroundColor = colors[colorIndex % colors.length]
-      colorIndex++
-    }, config.duration / colors.length)
-
-    setTimeout(() => {
-      clearInterval(colorInterval)
-      container.style.backgroundColor = ""
-    }, config.duration)
-  }
-
-  const showBreathingGuide = async (config: any) => {
-    // 显示呼吸指导界面
-    const breathingGuide = document.createElement("div")
-    breathingGuide.className = "breathing-guide"
-    breathingGuide.innerHTML = `
-      <div class="breathing-circle">
-        <div class="breathing-text">跟随圆圈呼吸</div>
-      </div>
-    `
-
-    document.body.appendChild(breathingGuide)
-
-    // 3分钟后自动移除
-    setTimeout(() => {
-      document.body.removeChild(breathingGuide)
-    }, 180000)
-  }
-
-  const playTherapeuticMusic = async (config: any) => {
-    // 播放治疗性音乐
+  const updateRealTimeMetrics = async () => {
     try {
-      const audio = new Audio("/therapeutic-music.mp3")
-      audio.volume = config.volume
-      audio.loop = true
-      await audio.play()
+      // 1. 情绪分析
+      const emotionInput = {
+        userId: 'current_user',
+        text: '当前用户状态分析', // 实际应用中会从用户输入获取
+        // audioData: 从麦克风获取
+        // videoFrame: 从摄像头获取
+        physiological: {
+          heartRate: 72 + Math.random() * 20, // 模拟心率数据
+          skinConductance: 5 + Math.random() * 3
+        }
+      }
 
-      setTimeout(() => {
-        audio.pause()
-      }, config.duration)
+      const newEmotionState = await emotionAI.analyzeEmotion(emotionInput)
+      
+      // 2. 更新UI适应
+      const uiConfig = await emotionAI.adaptUIToEmotion('current_user', newEmotionState)
+      setAdaptiveUI(uiConfig)
+
+      // 3. 检查是否需要情绪干预
+      if (newEmotionState.intensity > 0.7 || newEmotionState.valence < -0.5) {
+        await triggerEmotionalIntervention(newEmotionState)
+      }
+
+      // 4. 更新预测性洞察
+      setSystemStatus(prev => ({ ...prev, predictiveEngine: 'predicting' }))
+      const insights = await predictiveInteraction.predictNextAction('current_user', 'immediate')
+      if (insights) {
+        setPredictiveInsights(prev => [insights, ...prev.slice(0, 4)])
+      }
+
+      // 5. 更新实时指标
+      setRealTimeMetrics(prev => ({
+        ...prev,
+        emotionState: newEmotionState,
+        cognitiveLoad: Math.max(0, Math.min(1, prev.cognitiveLoad + (Math.random() - 0.5) * 0.1)),
+        attentionLevel: Math.max(0, Math.min(1, prev.attentionLevel + (Math.random() - 0.5) * 0.1)),
+        stressLevel: newEmotionState.primary === 'anger' || newEmotionState.primary === 'fear' ? 
+          Math.min(1, newEmotionState.intensity) : prev.stressLevel * 0.95,
+        engagementScore: Math.max(0, Math.min(1, prev.engagementScore + (Math.random() - 0.5) * 0.1)),
+        productivityIndex: Math.max(0, Math.min(1, prev.productivityIndex + (Math.random() - 0.5) * 0.05)),
+        wellbeingScore: (1 - prev.stressLevel + prev.engagementScore + (newEmotionState.valence + 1) / 2) / 3
+      }))
+
     } catch (error) {
-      console.warn("音乐播放失败:", error)
+      console.error('更新实时指标失败:', error)
     }
   }
 
-  const adjustContentPresentation = async (config: any) => {
-    if (!containerRef.current) return
+  const triggerEmotionalIntervention = async (emotionState: EmotionData) => {
+    try {
+      setSystemStatus(prev => ({ ...prev, emotionAI: 'intervening' }))
 
-    const container = containerRef.current
+      // 根据情绪状态选择干预类型
+      if (emotionState.arousal > 0.8) {
+        // 高激活状态 - 呼吸练习
+        const breathingExercise = await emotionAI.generateBreathingExercise(emotionState)
+        setCurrentTherapy({
+          type: 'breathing',
+          config: breathingExercise,
+          active: true
+        })
+      } else if (emotionState.valence < -0.5) {
+        // 负面情绪 - 色彩疗法
+        const colorTherapy = await emotionAI.generateColorTherapy(emotionState)
+        setCurrentTherapy({
+          type: 'color',
+          config: colorTherapy,
+          active: true
+        })
+        
+        // 应用色彩疗法到界面
+        applyColorTherapy(colorTherapy)
+      } else if (emotionState.intensity > 0.7) {
+        // 强烈情绪 - 音乐疗法
+        const musicTherapy = await emotionAI.generateMusicTherapy(emotionState)
+        setCurrentTherapy({
+          type: 'music',
+          config: musicTherapy,
+          active: true
+        })
+      }
 
-    if (config.complexity === "reduced") {
-      container.classList.add("simplified-content")
+      // 5秒后自动停止干预
+      setTimeout(() => {
+        setCurrentTherapy({ type: null, config: null, active: false })
+        setSystemStatus(prev => ({ ...prev, emotionAI: 'monitoring' }))
+      }, 15000)
+
+    } catch (error) {
+      console.error('情绪干预失败:', error)
     }
+  }
 
-    if (config.pace === "slower") {
-      container.style.setProperty("--animation-duration", "3s")
+  const applyColorTherapy = (config: ColorTherapyConfig) => {
+    const root = document.documentElement
+    root.style.setProperty('--therapy-primary', config.primaryColor)
+    root.style.setProperty('--therapy-accent', config.accentColor)
+    root.style.setProperty('--therapy-bg', config.backgroundColor)
+    root.style.setProperty('--therapy-text', config.textColor)
+    
+    // 添加过渡效果
+    root.style.setProperty('--therapy-transition', `all ${config.duration}ms ${config.transition}`)
+  }
+
+  const startARSession = async () => {
+    try {
+      const success = await arvrInterface.startARSession()
+      if (success) {
+        const session = arvrInterface.getSession()
+        setActiveXRSession(session)
+        setSystemStatus(prev => ({ ...prev, arvrInterface: 'active' }))
+        
+        // 创建默认的空间UI元素
+        arvrInterface.createSpatialMenu([
+          { label: 'AI助手', action: 'ai-assistant' },
+          { label: '数据可视化', action: 'visualization' },
+          { label: '协作空间', action: 'collaboration' },
+          { label: '设置', action: 'settings' }
+        ])
+      }
+    } catch (error) {
+      console.error('启动AR会话失败:', error)
     }
+  }
 
-    if (config.supportLevel === "increased") {
-      // 显示更多帮助提示
-      showNotification("我在这里为您提供额外支持", "info")
+  const startVRSession = async () => {
+    try {
+      const success = await arvrInterface.startVRSession()
+      if (success) {
+        const session = arvrInterface.getSession()
+        setActiveXRSession(session)
+        setSystemStatus(prev => ({ ...prev, arvrInterface: 'active' }))
+      }
+    } catch (error) {
+      console.error('启动VR会话失败:', error)
     }
   }
 
-  const adjustInteractionStyle = async (config: any) => {
-    // 调整交互风格
-    console.log("调整交互风格:", config)
+  const handoffToDevice = async (deviceId: string) => {
+    try {
+      const context = {
+        conversation: 'current_conversation',
+        userState: realTimeMetrics,
+        aiMemory: advancedAI.getUserContext('current_user')
+      }
+      
+      const success = await crossDeviceSync.handoffToDevice(deviceId, context)
+      if (success) {
+        console.log(`成功切换到设备: ${deviceId}`)
+      }
+    } catch (error) {
+      console.error('设备切换失败:', error)
+    }
   }
 
-  const showContentSuggestion = async (suggestion: string) => {
-    showNotification(`内容建议: ${suggestion}`, "info")
+  const optimizeCurrentWorkflow = async () => {
+    try {
+      setSystemStatus(prev => ({ ...prev, predictiveEngine: 'optimizing' }))
+      const optimization = await predictiveInteraction.optimizeWorkflow('current_user', 'current_workflow')
+      if (optimization) {
+        setWorkflowOptimizations(prev => [optimization, ...prev.slice(0, 2)])
+      }
+    } catch (error) {
+      console.error('工作流程优化失败:', error)
+    }
   }
 
-  const adjustUI = async (adjustment: string) => {
-    console.log("UI调整:", adjustment)
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'active':
+      case 'monitoring':
+      case 'connected':
+      case 'ready':
+      case 'learning':
+      case 'predicting':
+        return 'bg-green-500'
+      case 'standby':
+      case 'analyzing':
+      case 'syncing':
+      case 'optimizing':
+        return 'bg-yellow-500'
+      case 'intervening':
+        return 'bg-blue-500'
+      case 'offline':
+      case 'disconnected':
+      case 'unavailable':
+        return 'bg-red-500'
+      default:
+        return 'bg-gray-500'
+    }
   }
 
-  const optimizeWorkflow = async (optimization: string) => {
-    console.log("工作流程优化:", optimization)
+  const getEmotionColor = (emotion: string) => {
+    const colorMap: Record<string, string> = {
+      joy: 'text-yellow-600 bg-yellow-100',
+      sadness: 'text-blue-600 bg-blue-100',
+      anger: 'text-red-600 bg-red-100',
+      fear: 'text-purple-600 bg-purple-100',
+      surprise: 'text-green-600 bg-green-100',
+      disgust: 'text-orange-600 bg-orange-100',
+      neutral: 'text-gray-600 bg-gray-100'
+    }
+    return colorMap[emotion] || 'text-gray-600 bg-gray-100'
   }
 
-  const showProactiveHelp = async (help: string) => {
-    showNotification(`主动帮助: ${help}`, "help")
+  const getEmotionIcon = (emotion: string) => {
+    switch (emotion) {
+      case 'joy': return '😊'
+      case 'sadness': return '😢'
+      case 'anger': return '😠'
+      case 'fear': return '😨'
+      case 'surprise': return '😲'
+      case 'disgust': return '🤢'
+      default: return '😐'
+    }
   }
 
-  const showNotification = (message: string, type: "success" | "error" | "info" | "help") => {
-    // 简化的通知实现
-    const notification = document.createElement("div")
-    notification.className = `notification notification-${type}`
-    notification.textContent = message
-
-    document.body.appendChild(notification)
-
-    setTimeout(() => {
-      document.body.removeChild(notification)
-    }, 5000)
+  const cleanup = () => {
+    if (videoRef.current?.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream
+      stream.getTracks().forEach(track => track.stop())
+    }
+    
+    if (audioContextRef.current) {
+      audioContextRef.current.close()
+    }
+    
+    arvrInterface.endSession()
+    crossDeviceSync.destroy()
   }
 
-  if (isInitializing) {
+  if (!isInitialized) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-purple-400 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-white mb-2">初始化下一代界面</h2>
-          <p className="text-gray-300">正在启动AI、情绪计算、预测交互和空间界面...</p>
+      <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center">
+        <div className="text-center text-white">
+          <div className="w-20 h-20 border-4 border-white border-t-transparent rounded-full animate-spin mx-auto mb-6"></div>
+          <h2 className="text-2xl font-bold mb-4">🚀 初始化下一代智能交互系统</h2>
+          <div className="space-y-2 text-sm opacity-80">
+            <p>🧠 启动高级AI引擎...</p>
+            <p>❤️ 初始化情绪计算系统...</p>
+            <p>🔄 建立跨设备同步...</p>
+            <p>🥽 准备AR/VR界面...</p>
+            <p>🔮 激活预测性交互...</p>
+          </div>
         </div>
       </div>
     )
   }
 
   return (
-    <div
-      ref={containerRef}
-      className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 relative overflow-hidden"
-      style={{
-        backgroundColor: state.moodInterface?.colorScheme?.background || "",
-        color: state.moodInterface?.colorScheme?.text || "",
-      }}
-    >
-      {/* 隐藏的视频元素用于情绪检测 */}
-      <video ref={videoRef} autoPlay muted className="hidden" onLoadedMetadata={() => console.log("摄像头已启动")} />
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50" 
+         style={adaptiveUI?.colors ? {
+           backgroundColor: `var(--therapy-bg, ${adaptiveUI.colors.backgroundColor})`,
+           transition: 'var(--therapy-transition, all 300ms ease)'
+         } : {}}>
+      
+      {/* 隐藏的视频和画布元素用于实时分析 */}
+      <video ref={videoRef} className="hidden" autoPlay muted />
+      <canvas ref={canvasRef} className="hidden" />
 
-      {/* 顶部控制栏 */}
-      <div className="bg-black/20 backdrop-blur-xl border-b border-white/10 px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <button
-              onClick={() => router.back()}
-              className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
-            >
-              <ArrowLeft className="w-5 h-5 text-white" />
-            </button>
-            <div className="flex items-center space-x-3">
-              <Sparkles className="w-8 h-8 text-purple-400" />
+      {/* 顶部状态栏 */}
+      <header className="bg-white/80 backdrop-blur-sm border-b border-gray-200 sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 py-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <Button variant="ghost" size="sm" onClick={() => router.back()}>
+                <ArrowLeft className="w-5 h-5 mr-2" />
+                返回
+              </Button>
               <div>
-                <h1 className="text-xl font-bold text-white">下一代智能界面</h1>
-                <p className="text-sm text-gray-400">AI + 情绪计算 + 预测交互 + 空间界面</p>
+                <h1 className="text-xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
+                  🌟 下一代智能交互中心
+                </h1>
+                <p className="text-sm text-gray-500">
+                  情绪感知 • 预测智能 • 跨设备协同 • 空间计算
+                </p>
               </div>
             </div>
-          </div>
 
-          <div className="flex items-center space-x-2">
-            {/* 功能状态指示器 */}
-            {activeFeatures.map((feature) => (
-              <div
-                key={feature}
-                className="px-3 py-1 bg-green-500/20 border border-green-400/30 rounded-full text-green-400 text-xs"
-              >
-                {feature.replace("_", " ").toUpperCase()}
+            <div className="flex items-center space-x-4">
+              {/* 系统状态指示器 */}
+              <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-1">
+                  <div className={`w-2 h-2 rounded-full ${getStatusColor(systemStatus.aiEngine)}`}></div>
+                  <span className="text-xs text-gray-600">AI</span>
+                </div>
+                <div className="flex items-center space-x-1">
+                  <div className={`w-2 h-2 rounded-full ${getStatusColor(systemStatus.emotionAI)}`}></div>
+                  <span className="text-xs text-gray-600">情绪</span>
+                </div>
+                <div className="flex items-center space-x-1">
+                  <div className={`w-2 h-2 rounded-full ${getStatusColor(systemStatus.crossDeviceSync)}`}></div>
+                  <span className="text-xs text-gray-600">同步</span>
+                </div>
+                <div className="flex items-center space-x-1">
+                  <div className={`w-2 h-2 rounded-full ${getStatusColor(systemStatus.arvrInterface)}`}></div>
+                  <span className="text-xs text-gray-600">XR</span>
+                </div>
+                <div className="flex items-center space-x-1">
+                  <div className={`w-2 h-2 rounded-full ${getStatusColor(systemStatus.predictiveEngine)}`}></div>
+                  <span className="text-xs text-gray-600">预测</span>
+                </div>
               </div>
-            ))}
+
+              <Button 
+                variant={isMonitoring ? "default" : "outline"} 
+                size="sm"
+                onClick={() => setIsMonitoring(!isMonitoring)}
+              >
+                {isMonitoring ? <Pause className="w-4 h-4 mr-2" /> : <Play className="w-4 h-4 mr-2" />}
+                {isMonitoring ? '暂停监控' : '开始监控'}
+              </Button>
+            </div>
           </div>
         </div>
-      </div>
+      </header>
 
-      {/* 主要内容区域 */}
-      <div className="flex h-[calc(100vh-80px)]">
-        {/* 左侧：AI交互面板 */}
-        <div className="w-1/3 p-6 border-r border-white/10">
-          <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-6 h-full flex flex-col">
-            <h3 className="text-lg font-medium text-white mb-4 flex items-center">
-              <Brain className="w-5 h-5 mr-2 text-purple-400" />
-              高级AI助手
-            </h3>
-
-            {/* AI回应显示 */}
-            <div className="flex-1 mb-4 p-4 bg-black/20 rounded-lg overflow-y-auto">
-              {aiResponse ? (
-                <div className="text-white leading-relaxed">
-                  {aiResponse}
-                  {state.predictiveInsights.length > 0 && (
-                    <div className="mt-4 pt-4 border-t border-white/20">
-                      <h4 className="text-sm font-medium text-purple-400 mb-2">预测性洞察:</h4>
-                      {state.predictiveInsights.slice(0, 3).map((insight, index) => (
-                        <div key={index} className="text-sm text-gray-300 mb-1">
-                          • {insight.prediction} (置信度: {Math.round(insight.confidence * 100)}%)
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="text-gray-400 text-center py-8">
-                  <Brain className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                  <p>AI助手准备就绪</p>
-                  <p className="text-sm">支持情绪感知和预测性交互</p>
+      {/* 情绪干预覆盖层 */}
+      {currentTherapy.active && (
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40 flex items-center justify-center">
+          <Card className="w-96 shadow-2xl border-0" style={{
+            backgroundColor: currentTherapy.type === 'color' ? 
+              currentTherapy.config?.backgroundColor : 'white'
+          }}>
+            <CardHeader className="text-center">
+              <CardTitle className="flex items-center justify-center space-x-2">
+                {currentTherapy.type === 'color' && <Palette className="w-5 h-5" />}
+                {currentTherapy.type === 'breathing' && <Wind className="w-5 h-5" />}
+                {currentTherapy.type === 'music' && <Music className="w-5 h-5" />}
+                <span>
+                  {currentTherapy.type === 'color' && '色彩疗法'}
+                  {currentTherapy.type === 'breathing' && '呼吸练习'}
+                  {currentTherapy.type === 'music' && '音乐疗法'}
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="text-center space-y-4">
+              {currentTherapy.type === 'breathing' && (
+                <div className="space-y-4">
+                  <div className="text-lg font-medium">
+                    {currentTherapy.config.type} 呼吸法
+                  </div>
+                  <div className="text-sm text-gray-600">
+                    吸气 {currentTherapy.config.inhaleTime}秒 → 
+                    保持 {currentTherapy.config.holdTime}秒 → 
+                    呼气 {currentTherapy.config.exhaleTime}秒
+                  </div>
+                  <div className="w-20 h-20 mx-auto border-4 border-blue-500 rounded-full animate-pulse"></div>
+                  <div className="text-sm">
+                    剩余 {currentTherapy.config.cycles} 个循环
+                  </div>
                 </div>
               )}
-            </div>
-
-            {/* 输入区域 */}
-            <div className="flex space-x-2">
-              <input
-                type="text"
-                value={userInput}
-                onChange={(e) => setUserInput(e.target.value)}
-                placeholder="与AI助手对话..."
-                className="flex-1 px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-400"
-                onKeyPress={(e) => {
-                  if (e.key === "Enter" && !isProcessing) {
-                    handleAdvancedAIInteraction(userInput)
-                  }
-                }}
-                disabled={isProcessing}
-              />
-              <button
-                onClick={() => handleAdvancedAIInteraction(userInput)}
-                disabled={!userInput.trim() || isProcessing}
-                className="px-4 py-2 bg-purple-500 hover:bg-purple-600 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg transition-colors"
+              
+              {currentTherapy.type === 'color' && (
+                <div className="space-y-4">
+                  <div className="text-lg font-medium">舒缓色彩环境</div>
+                  <div className="flex justify-center space-x-2">
+                    <div 
+                      className="w-8 h-8 rounded-full border-2 border-white shadow-lg"
+                      style={{ backgroundColor: currentTherapy.config.primaryColor }}
+                    ></div>
+                    <div 
+                      className="w-8 h-8 rounded-full border-2 border-white shadow-lg"
+                      style={{ backgroundColor: currentTherapy.config.accentColor }}
+                    ></div>
+                  </div>
+                  <div className="text-sm text-gray-600">
+                    让这些颜色帮助您放松心情
+                  </div>
+                </div>
+              )}
+              
+              {currentTherapy.type === 'music' && (
+                <div className="space-y-4">
+                  <div className="text-lg font-medium">
+                    {currentTherapy.config.genre} 音乐疗法
+                  </div>
+                  <div className="flex items-center justify-center space-x-4">
+                    <Volume2 className="w-6 h-6 text-blue-500" />
+                    <div className="text-sm">
+                      {currentTherapy.config.tempo} BPM • {currentTherapy.config.key}
+                    </div>
+                  </div>
+                  <div className="w-16 h-16 mx-auto bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center animate-spin">
+                    <Music className="w-8 h-8 text-white" />
+                  </div>
+                </div>
+              )}
+              
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setCurrentTherapy({ type: null, config: null, active: false })}
               >
-                {isProcessing ? (
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <Zap className="w-5 h-5 text-white" />
-                )}
+                结束疗法
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      <div className="max-w-7xl mx-auto px-4 py-6">
+        {/* 标签导航 */}
+        <div className="flex space-x-1 mb-6 bg-white/50 backdrop-blur-sm rounded-lg p-1">
+          {[
+            { id: 'overview', label: '总览', icon: Activity },
+            { id: 'emotion', label: '情绪AI', icon: Heart },
+            { id: 'devices', label: '设备协同', icon: Smartphone },
+            { id: 'ar-vr', label: 'AR/VR', icon: Eye },
+            { id: 'predictions', label: '预测智能', icon: Brain },
+            { id: 'wellness', label: '健康管理', icon: Target }
+          ].map(tab => {
+            const Icon = tab.icon
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setSelectedTab(tab.id as any)}
+                className={`flex items-center space-x-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                  selectedTab === tab.id
+                    ? 'bg-white text-blue-600 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                <span>{tab.label}</span>
               </button>
-            </div>
-          </div>
+            )
+          })}
         </div>
 
-        {/* 中间：情绪和预测面板 */}
-        <div className="w-1/3 p-6">
-          <div className="space-y-6 h-full">
-            {/* 情绪状态面板 */}
-            <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-6">
-              <h3 className="text-lg font-medium text-white mb-4 flex items-center">
-                <Heart className="w-5 h-5 mr-2 text-red-400" />
-                情绪计算
-              </h3>
-
-              {state.userEmotion ? (
-                <div className="space-y-3">
+        {/* 总览标签 */}
+        {selectedTab === 'overview' && (
+          <div className="space-y-6">
+            {/* 实时指标仪表板 */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <Card className="border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100">
+                <CardContent className="p-4">
                   <div className="flex items-center justify-between">
-                    <span className="text-gray-300">主要情绪:</span>
-                    <span className="text-white font-medium">{state.userEmotion.primaryEmotion}</span>
+                    <div>
+                      <p className="text-sm text-blue-600 font-medium">情绪状态</p>
+                      <div className="flex items-center space-x-2 mt-1">
+                        <span className="text-2xl">{getEmotionIcon(realTimeMetrics.emotionState.primary)}</span>
+                        <div>
+                          <p className="font-bold text-blue-900 capitalize">
+                            {realTimeMetrics.emotionState.primary}
+                          </p>
+                          <p className="text-xs text-blue-600">
+                            强度: {Math.round(realTimeMetrics.emotionState.intensity * 100)}%
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    <Heart className="w-8 h-8 text-blue-500" />
                   </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-0 shadow-lg bg-gradient-to-br from-green-50 to-green-100">
+                <CardContent className="p-4">
                   <div className="flex items-center justify-between">
-                    <span className="text-gray-300">强度:</span>
-                    <div className="flex-1 mx-3 bg-gray-600 rounded-full h-2">
-                      <div
-                        className="bg-red-400 h-2 rounded-full transition-all duration-500"
-                        style={{ width: `${state.userEmotion.intensity * 100}%` }}
+                    <div>
+                      <p className="text-sm text-green-600 font-medium">认知负荷</p>
+                      <p className="text-2xl font-bold text-green-900">
+                        {Math.round(realTimeMetrics.cognitiveLoad * 100)}%
+                      </p>
+                      <Progress 
+                        value={realTimeMetrics.cognitiveLoad * 100} 
+                        className="h-2 mt-2"
                       />
                     </div>
-                    <span className="text-white text-sm">{Math.round(state.userEmotion.intensity * 100)}%</span>
+                    <Brain className="w-8 h-8 text-green-500" />
                   </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-0 shadow-lg bg-gradient-to-br from-purple-50 to-purple-100">
+                <CardContent className="p-4">
                   <div className="flex items-center justify-between">
-                    <span className="text-gray-300">情绪价值:</span>
-                    <span
-                      className={`font-medium ${state.userEmotion.valence > 0 ? "text-green-400" : "text-red-400"}`}
-                    >
-                      {state.userEmotion.valence > 0 ? "积极" : "消极"}
-                    </span>
-                  </div>
-
-                  {state.userEmotion.recommendations.length > 0 && (
-                    <div className="mt-4 pt-4 border-t border-white/20">
-                      <h4 className="text-sm font-medium text-blue-400 mb-2">AI建议:</h4>
-                      {state.userEmotion.recommendations.slice(0, 2).map((rec: string, index: number) => (
-                        <div key={index} className="text-sm text-gray-300 mb-1">
-                          • {rec}
-                        </div>
-                      ))}
+                    <div>
+                      <p className="text-sm text-purple-600 font-medium">专注度</p>
+                      <p className="text-2xl font-bold text-purple-900">
+                        {Math.round(realTimeMetrics.attentionLevel * 100)}%
+                      </p>
+                      <Progress 
+                        value={realTimeMetrics.attentionLevel * 100} 
+                        className="h-2 mt-2"
+                      />
                     </div>
-                  )}
-                </div>
-              ) : (
-                <div className="text-gray-400 text-center py-4">
-                  <Eye className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">正在分析情绪状态...</p>
-                </div>
-              )}
+                    <Target className="w-8 h-8 text-purple-500" />
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-0 shadow-lg bg-gradient-to-br from-orange-50 to-orange-100">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-orange-600 font-medium">健康指数</p>
+                      <p className="text-2xl font-bold text-orange-900">
+                        {Math.round(realTimeMetrics.wellbeingScore * 100)}%
+                      </p>
+                      <Progress 
+                        value={realTimeMetrics.wellbeingScore * 100} 
+                        className="h-2 mt-2"
+                      />
+                    </div>
+                    <Activity className="w-8 h-8 text-orange-500" />
+                  </div>
+                </CardContent>
+              </Card>
             </div>
 
-            {/* 预测性交互面板 */}
-            <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-6 flex-1">
-              <h3 className="text-lg font-medium text-white mb-4 flex items-center">
-                <Target className="w-5 h-5 mr-2 text-green-400" />
-                预测性交互
-              </h3>
-
-              {state.predictedActions.length > 0 ? (
-                <div className="space-y-3">
-                  {state.predictedActions.slice(0, 4).map((action, index) => (
-                    <div key={index} className="p-3 bg-black/20 rounded-lg">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-white text-sm font-medium">{action.action}</span>
-                        <span className="text-xs text-gray-400">{Math.round(action.confidence * 100)}%</span>
-                      </div>
-                      <div className="text-xs text-gray-300">{action.reasoning}</div>
-                      <div className="flex items-center justify-between mt-2">
-                        <span
-                          className={`text-xs px-2 py-1 rounded ${
-                            action.priority === "high"
-                              ? "bg-red-500/20 text-red-400"
-                              : action.priority === "medium"
-                                ? "bg-yellow-500/20 text-yellow-400"
-                                : "bg-green-500/20 text-green-400"
-                          }`}
-                        >
-                          {action.priority}
+            {/* 系统状态和快速操作 */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card className="border-0 shadow-lg">
+                <CardHeader>
+                  <CardTitle className="flex items-center">
+                    <CircuitBoard className="w-5 h-5 mr-2 text-blue-600" />
+                    系统状态
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {Object.entries(systemStatus).map(([system, status]) => (
+                    <div key={system} className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <div className={`w-3 h-3 rounded-full ${getStatusColor(status)}`}></div>
+                        <span className="font-medium capitalize">
+                          {system === 'aiEngine' && 'AI引擎'}
+                          {system === 'emotionAI' && '情绪AI'}
+                          {system === 'crossDeviceSync' && '设备同步'}
+                          {system === 'arvrInterface' && 'AR/VR界面'}
+                          {system === 'predictiveEngine' && '预测引擎'}
                         </span>
-                        <span className="text-xs text-gray-400">{action.timing}</span>
                       </div>
+                      <Badge variant="outline" className="capitalize">
+                        {status}
+                      </Badge>
                     </div>
                   ))}
-                </div>
-              ) : (
-                <div className="text-gray-400 text-center py-8">
-                  <Target className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">正在分析行为模式...</p>
-                </div>
-              )}
+                </CardContent>
+              </Card>
+
+              <Card className="border-0 shadow-lg">
+                <CardHeader>
+                  <CardTitle className="flex items-center">
+                    <Zap className="w-5 h-5 mr-2 text-yellow-600" />
+                    快速操作
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <Button 
+                    className="w-full justify-start bg-transparent" 
+                    variant="outline"
+                    onClick={startARSession}
+                    disabled={systemStatus.arvrInterface === 'unavailable'}
+                  >
+                    <Eye className="w-4 h-4 mr-2" />
+                    启动AR体验
+                  </Button>
+                  
+                  <Button 
+                    className="w-full justify-start bg-transparent" 
+                    variant="outline"
+                    onClick={optimizeCurrentWorkflow}
+                  >
+                    <TrendingUp className="w-4 h-4 mr-2" />
+                    优化工作流程
+                  </Button>
+                  
+                  <Button 
+                    className="w-full justify-start bg-transparent" 
+                    variant="outline"
+                    onClick={() => {
+                      const colorTherapy = emotionAI.generateColorTherapy(realTimeMetrics.emotionState)
+                      colorTherapy.then(config => {
+                        setCurrentTherapy({ type: 'color', config, active: true })
+                      })
+                    }}
+                  >
+                    <Palette className="w-4 h-4 mr-2" />
+                    启动色彩疗法
+                  </Button>
+                  
+                  <Button 
+                    className="w-full justify-start bg-transparent" 
+                    variant="outline"
+                    onClick={() => crossDeviceSync.createCollaborationSession('新协作会话')}
+                  >
+                    <Users className="w-4 h-4 mr-2" />
+                    创建协作会话
+                  </Button>
+                </CardContent>
+              </Card>
             </div>
-          </div>
-        </div>
 
-        {/* 右侧：跨设备和空间界面面板 */}
-        <div className="w-1/3 p-6 border-l border-white/10">
-          <div className="space-y-6 h-full">
-            {/* 跨设备同步面板 */}
-            <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-6">
-              <h3 className="text-lg font-medium text-white mb-4 flex items-center">
-                <Globe className="w-5 h-5 mr-2 text-blue-400" />
-                跨设备同步
-              </h3>
-
-              <div className="space-y-3">
-                {["iPhone 15 Pro", "MacBook Pro", "iPad Air"].map((device, index) => (
-                  <div key={device} className="flex items-center justify-between p-3 bg-black/20 rounded-lg">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-2 h-2 bg-green-400 rounded-full" />
-                      <span className="text-white text-sm">{device}</span>
-                    </div>
-                    <button
-                      onClick={() => handleDeviceHandoff(device)}
-                      className="px-3 py-1 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-400/30 rounded text-blue-400 text-xs transition-colors"
-                    >
-                      切换
-                    </button>
-                  </div>
-                ))}
-              </div>
-
-              {state.activeHandoffs.length > 0 && (
-                <div className="mt-4 pt-4 border-t border-white/20">
-                  <h4 className="text-sm font-medium text-green-400 mb-2">活跃切换:</h4>
-                  {state.activeHandoffs.map((handoff, index) => (
-                    <div key={index} className="text-xs text-gray-300 mb-1">
-                      • 已切换到 {handoff.continuationUrl ? "目标设备" : "未知设备"}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* 空间界面面板 */}
-            <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-6 flex-1">
-              <h3 className="text-lg font-medium text-white mb-4 flex items-center">
-                <Sparkles className="w-5 h-5 mr-2 text-purple-400" />
-                空间界面
-              </h3>
-
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-300">当前模式:</span>
-                  <span className="text-white font-medium uppercase">{state.spatialMode}</span>
-                </div>
-
-                <button
-                  onClick={toggleSpatialMode}
-                  className={`w-full py-3 px-4 rounded-lg transition-colors ${
-                    state.spatialMode === "2d"
-                      ? "bg-purple-500 hover:bg-purple-600 text-white"
-                      : "bg-gray-600 hover:bg-gray-700 text-gray-300"
-                  }`}
-                >
-                  {state.spatialMode === "2d" ? "启用AR模式" : "返回2D模式"}
-                </button>
-
-                {state.spatialElements.length > 0 && (
-                  <div className="space-y-2">
-                    <h4 className="text-sm font-medium text-purple-400">空间元素:</h4>
-                    {state.spatialElements.map((element, index) => (
-                      <div key={index} className="text-xs text-gray-300 p-2 bg-black/20 rounded">
-                        • 空间元素 #{index + 1}
+            {/* 预测性洞察 */}
+            {predictiveInsights.length > 0 && (
+              <Card className="border-0 shadow-lg">
+                <CardHeader>
+                  <CardTitle className="flex items-center">
+                    <Lightbulb className="w-5 h-5 mr-2 text-yellow-600" />
+                    AI预测洞察
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {predictiveInsights.slice(0, 3).map((insight) => (
+                      <div key={insight.id} className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-2 mb-2">
+                              <Badge variant="outline" className="text-xs">
+                                {insight.timeframe}
+                              </Badge>
+                              <Badge variant="outline" className="text-xs">
+                                置信度: {Math.round(insight.confidence * 100)}%
+                              </Badge>
+                            </div>
+                            <p className="font-medium text-gray-900 mb-1">
+                              {insight.prediction.action}
+                            </p>
+                            <p className="text-sm text-gray-600">
+                              {insight.prediction.reasoning.join(' • ')}
+                            </p>
+                          </div>
+                          <Sparkles className="w-5 h-5 text-purple-500 flex-shrink-0 ml-3" />
+                        </div>
                       </div>
                     ))}
                   </div>
-                )}
-
-                {activeFeatures.includes("spatial_interface") && (
-                  <div className="text-xs text-green-400 text-center py-2">✓ 空间界面已启用</div>
-                )}
-              </div>
-            </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
-        </div>
-      </div>
+        )}
 
-      {/* 情绪干预覆盖层 */}
-      {state.emotionalInterventions.length > 0 && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-8 max-w-md mx-4">
-            <h3 className="text-xl font-medium text-white mb-4 text-center">情绪关怀</h3>
-            <div className="space-y-4">
-              {state.emotionalInterventions.slice(0, 2).map((intervention, index) => (
-                <div key={index} className="text-center">
-                  <div className="text-gray-300 mb-2">
-                    {intervention.type === "breathing_guide" && "让我们一起深呼吸"}
-                    {intervention.type === "color_therapy" && "感受这些舒缓的色彩"}
-                    {intervention.type === "music_therapy" && "享受这段放松的音乐"}
-                  </div>
-                  <div className="text-sm text-gray-400">
-                    预计持续时间: {Math.round(intervention.duration / 60000)} 分钟
-                  </div>
+        {/* 其他标签内容... */}
+        {selectedTab === 'emotion' && (
+          <div className="space-y-6">
+            <Card className="border-0 shadow-lg">
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <Heart className="w-5 h-5 mr-2 text-red-500" />
+                  情绪AI分析中心
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-center py-8">
+                  <Heart className="w-16 h-16 text-red-500 mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">情绪AI功能开发中</h3>
+                  <p className="text-gray-600">
+                    高级情绪分析、色彩疗法、呼吸指导等功能即将上线
+                  </p>
                 </div>
-              ))}
-            </div>
-            <button
-              onClick={() => setState((prev) => ({ ...prev, emotionalInterventions: [] }))}
-              className="w-full mt-6 py-2 px-4 bg-purple-500 hover:bg-purple-600 rounded-lg text-white transition-colors"
-            >
-              我感觉好多了
-            </button>
+              </CardContent>
+            </Card>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* 预测性帮助浮动提示 */}
-      {state.predictedActions.some((action) => action.timing === "immediate" && action.confidence > 0.9) && (
-        <div className="fixed bottom-6 right-6 bg-blue-500/90 backdrop-blur-sm border border-blue-400/30 rounded-xl p-4 max-w-sm">
-          <div className="flex items-start space-x-3">
-            <Target className="w-5 h-5 text-blue-200 mt-0.5 flex-shrink-0" />
-            <div>
-              <h4 className="text-white font-medium mb-1">智能建议</h4>
-              <p className="text-blue-100 text-sm">
-                {
-                  state.predictedActions.find((action) => action.timing === "immediate" && action.confidence > 0.9)
-                    ?.action
-                }
-              </p>
-              <button
-                onClick={() => {
-                  const action = state.predictedActions.find((a) => a.timing === "immediate" && a.confidence > 0.9)
-                  if (action) executePredictiveAction(action)
-                }}
-                className="mt-2 px-3 py-1 bg-white/20 hover:bg-white/30 rounded text-white text-xs transition-colors"
-              >
-                执行建议
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 动态背景效果 */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-purple-500/20 rounded-full blur-3xl animate-pulse" />
-        <div
-          className="absolute -bottom-40 -left-40 w-80 h-80 bg-blue-500/20 rounded-full blur-3xl animate-pulse"
-          style={{ animationDelay: "2s" }}
-        />
-        <div
-          className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-60 h-60 bg-green-500/10 rounded-full blur-3xl animate-pulse"
-          style={{ animationDelay: "4s" }}
-        />
-      </div>
-
-      {/* 全局样式 */}
-      <style jsx>{`
-        .breathing-guide {
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background: rgba(0, 0, 0, 0.8);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          z-index: 1000;
-        }
-
-        .breathing-circle {
-          width: 200px;
-          height: 200px;
-          border: 2px solid #8b5cf6;
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          animation: breathe 4s infinite;
-        }
-
-        .breathing-text {
-          color: white;
-          font-size: 18px;
-          text-align: center;
-        }
-
-        @keyframes breathe {
-          0%, 100% { transform: scale(1); }
-          50% { transform: scale(1.2); }
-        }
-
-        .notification {
-          position: fixed;
-          top: 20px;
-          right: 20px;
-          padding: 12px 20px;
-          border-radius: 8px;
-          color: white;
-          font-weight: 500;
-          z-index: 1000;
-          animation: slideIn 0.3s ease-out;
-        }
-
-        .notification-success {
-          background: rgba(34, 197, 94, 0.9);
-          border: 1px solid rgba(34, 197, 94, 0.3);
-        }
-
-        .notification-error {
-          background: rgba(239, 68, 68, 0.9);
-          border: 1px solid rgba(239, 68, 68, 0.3);
-        }
-
-        .notification-info {
-          background: rgba(59, 130, 246, 0.9);
-          border: 1px solid rgba(59, 130, 246, 0.3);
-        }
-
-        .notification-help {
-          background: rgba(168, 85, 247, 0.9);
-          border: 1px solid rgba(168, 85, 247, 0.3);
-        }
-
-        @keyframes slideIn {
-          from {
-            transform: translateX(100%);
-            opacity: 0;
-          }
-          to {
-            transform: translateX(0);
-            opacity: 1;
-          }
-        }
-
-        .simplified-content * {
-          font-size: 1.1em !important;
-          line-height: 1.6 !important;
-        }
-
-        .simplified-content .complex-element {
-          display: none !important;
-        }
-      `}</style>
-    </div>
-  )
-}
+        {/* 设备协同标签 */}
+        {selectedTab === 'devices' && (
+          <div className="space-y-6">
+            <Card className="border-0 shadow-lg">
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <Smartphone className="w-5 h-5 mr-2 text-blue-500" />
+                  跨设备协同中心
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {connectedDevices.map((device) => (
+                    <div key={device.id} className="p-4 border rounded-lg">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center space-x-2">
+                          {device.type === 'desktop' && <Monitor className="w-5 h-5" />}
+                          {device.type === 'mobile' && <Smartphone className="w-5 h-5" />}
+                          <span className="font-medium">{device.name}</span>
+                        </div>
+                        <div className={
