@@ -7,8 +7,8 @@ import { ThemeProvider } from "@/components/theme-provider"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "AI智能搜索平台",
-  description: "基于人工智能的智能搜索和内容生成平台",
+  title: "YYC³ AI - 无边界智能交互中心",
+  description: "基于无边界设计理念的AI智能交互平台，支持语音、手势、眼动等多模态交互方式",
   keywords: ["AI", "搜索", "人工智能", "内容生成", "智能助手"],
   authors: [{ name: "AI搜索团队" }],
   creator: "AI搜索平台",
@@ -26,22 +26,22 @@ export const metadata: Metadata = {
   },
   openGraph: {
     type: "website",
-    siteName: "AI智能搜索平台",
-    title: "AI智能搜索平台",
-    description: "基于人工智能的智能搜索和内容生成平台",
+    siteName: "YYC³ AI - 无边界智能交互中心",
+    title: "YYC³ AI - 无边界智能交互中心",
+    description: "基于无边界设计理念的AI智能交互平台，支持语音、手势、眼动等多模态交互方式",
     images: [
       {
         url: "/icon-512.png",
         width: 512,
         height: 512,
-        alt: "AI搜索平台",
+        alt: "YYC³ AI - 无边界智能交互中心",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "AI智能搜索平台",
-    description: "基于人工智能的智能搜索和内容生成平台",
+    title: "YYC³ AI - 无边界智能交互中心",
+    description: "基于无边界设计理念的AI智能交互平台，支持语音、手势、眼动等多模态交互方式",
     images: ["/icon-512.png"],
   },
   robots: {

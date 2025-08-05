@@ -1,11 +1,10 @@
 "use client"
 
+import type React from "react"
+
 import { useState, useEffect, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, Download, Share2, Settings, Play, Pause, VolumeX, ZoomIn, ZoomOut, RotateCcw } from "lucide-react"
+import { ArrowLeft, Brain, Eye, Hand, Mic, Download, Share2 } from "lucide-react"
 
 interface MindMapNode {
   id: string
@@ -13,566 +12,492 @@ interface MindMapNode {
   x: number
   y: number
   level: number
-  children: MindMapNode[]
+  children: string[]
   parent?: string
   color: string
-  expanded: boolean
-}
-
-interface MindMapData {
-  title: string
-  nodes: MindMapNode[]
-  connections: Array<{ from: string; to: string }>
 }
 
 export default function MindMapPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const query = searchParams.get("query") || ""
+  const query = searchParams.get("q") || ""
 
-  const [mindMapData, setMindMapData] = useState<MindMapData | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [isPlaying, setIsPlaying] = useState(false)
-  const [currentNode, setCurrentNode] = useState<string | null>(null)
-  const [zoom, setZoom] = useState(1)
-  const [pan, setPan] = useState({ x: 0, y: 0 })
-  const [selectedTheme, setSelectedTheme] = useState("default")
-  const [showSettings, setShowSettings] = useState(false)
-  const [autoPlay, setAutoPlay] = useState(false)
-  const [playSpeed, setPlaySpeed] = useState(2000)
+  const [nodes, setNodes] = useState<MindMapNode[]>([])
+  const [isGenerating, setIsGenerating] = useState(true)
+  const [selectedNode, setSelectedNode] = useState<string | null>(null)
+  const [isListening, setIsListening] = useState(false)
+  const [gestureMode, setGestureMode] = useState<"idle" | "pan" | "zoom">("idle")
+  const [scale, setScale] = useState(1)
+  const [offset, setOffset] = useState({ x: 0, y: 0 })
 
-  const svgRef = useRef<SVGSVGElement>(null)
-  const speechSynthesis = useRef<SpeechSynthesis | null>(null)
-  const playIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
 
-  const themes = {
-    default: {
-      background: "#ffffff",
-      primary: "#3b82f6",
-      secondary: "#10b981",
-      accent: "#f59e0b",
-      text: "#1f2937",
-    },
-    dark: {
-      background: "#1f2937",
-      primary: "#60a5fa",
-      secondary: "#34d399",
-      accent: "#fbbf24",
-      text: "#f9fafb",
-    },
-    nature: {
-      background: "#f0fdf4",
-      primary: "#16a34a",
-      secondary: "#059669",
-      accent: "#ca8a04",
-      text: "#14532d",
-    },
-    ocean: {
-      background: "#f0f9ff",
-      primary: "#0ea5e9",
-      secondary: "#06b6d4",
-      accent: "#8b5cf6",
-      text: "#0c4a6e",
-    },
-  }
-
+  // 生成思维导图数据
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      speechSynthesis.current = window.speechSynthesis
+    const generateMindMap = async () => {
+      setIsGenerating(true)
+
+      // 模拟AI生成过程
+      await new Promise((resolve) => setTimeout(resolve, 3000))
+
+      const centerNode: MindMapNode = {
+        id: "center",
+        text: query,
+        x: 400,
+        y: 300,
+        level: 0,
+        children: ["concept1", "concept2", "concept3", "concept4"],
+        color: "#8B5CF6",
+      }
+
+      const childNodes: MindMapNode[] = [
+        {
+          id: "concept1",
+          text: "核心概念",
+          x: 200,
+          y: 200,
+          level: 1,
+          children: ["detail1", "detail2"],
+          parent: "center",
+          color: "#3B82F6",
+        },
+        {
+          id: "concept2",
+          text: "实践应用",
+          x: 600,
+          y: 200,
+          level: 1,
+          children: ["detail3", "detail4"],
+          parent: "center",
+          color: "#10B981",
+        },
+        {
+          id: "concept3",
+          text: "发展趋势",
+          x: 200,
+          y: 400,
+          level: 1,
+          children: ["detail5"],
+          parent: "center",
+          color: "#F59E0B",
+        },
+        {
+          id: "concept4",
+          text: "学习路径",
+          x: 600,
+          y: 400,
+          level: 1,
+          children: ["detail6"],
+          parent: "center",
+          color: "#EF4444",
+        },
+        // 详细节点
+        {
+          id: "detail1",
+          text: "理论基础",
+          x: 100,
+          y: 150,
+          level: 2,
+          children: [],
+          parent: "concept1",
+          color: "#3B82F6",
+        },
+        {
+          id: "detail2",
+          text: "关键要素",
+          x: 100,
+          y: 250,
+          level: 2,
+          children: [],
+          parent: "concept1",
+          color: "#3B82F6",
+        },
+        {
+          id: "detail3",
+          text: "应用场景",
+          x: 700,
+          y: 150,
+          level: 2,
+          children: [],
+          parent: "concept2",
+          color: "#10B981",
+        },
+        {
+          id: "detail4",
+          text: "成功案例",
+          x: 700,
+          y: 250,
+          level: 2,
+          children: [],
+          parent: "concept2",
+          color: "#10B981",
+        },
+        {
+          id: "detail5",
+          text: "未来方向",
+          x: 100,
+          y: 450,
+          level: 2,
+          children: [],
+          parent: "concept3",
+          color: "#F59E0B",
+        },
+        {
+          id: "detail6",
+          text: "学习建议",
+          x: 700,
+          y: 450,
+          level: 2,
+          children: [],
+          parent: "concept4",
+          color: "#EF4444",
+        },
+      ]
+
+      setNodes([centerNode, ...childNodes])
+      setIsGenerating(false)
+    }
+
+    if (query) {
+      generateMindMap()
+    }
+  }, [query])
+
+  // 手势控制系统
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+
+    let startX = 0,
+      startY = 0
+    let startDistance = 0
+    let isPointerDown = false
+    let pointers: PointerEvent[] = []
+
+    const handlePointerDown = (e: PointerEvent) => {
+      pointers.push(e)
+
+      if (pointers.length === 1) {
+        isPointerDown = true
+        startX = e.clientX
+        startY = e.clientY
+        setGestureMode("pan")
+      } else if (pointers.length === 2) {
+        const dx = pointers[0].clientX - pointers[1].clientX
+        const dy = pointers[0].clientY - pointers[1].clientY
+        startDistance = Math.sqrt(dx * dx + dy * dy)
+        setGestureMode("zoom")
+      }
+    }
+
+    const handlePointerMove = (e: PointerEvent) => {
+      const index = pointers.findIndex((p) => p.pointerId === e.pointerId)
+      if (index !== -1) {
+        pointers[index] = e
+      }
+
+      if (pointers.length === 1 && isPointerDown) {
+        // 平移
+        const deltaX = e.clientX - startX
+        const deltaY = e.clientY - startY
+
+        setOffset((prev) => ({
+          x: prev.x + deltaX * 0.5,
+          y: prev.y + deltaY * 0.5,
+        }))
+
+        startX = e.clientX
+        startY = e.clientY
+      } else if (pointers.length === 2) {
+        // 缩放
+        const dx = pointers[0].clientX - pointers[1].clientX
+        const dy = pointers[0].clientY - pointers[1].clientY
+        const distance = Math.sqrt(dx * dx + dy * dy)
+
+        const scaleChange = distance / startDistance
+        setScale((prev) => Math.max(0.5, Math.min(3, prev * scaleChange)))
+        startDistance = distance
+      }
+    }
+
+    const handlePointerUp = (e: PointerEvent) => {
+      pointers = pointers.filter((p) => p.pointerId !== e.pointerId)
+
+      if (pointers.length === 0) {
+        isPointerDown = false
+        setTimeout(() => setGestureMode("idle"), 300)
+      }
+    }
+
+    container.addEventListener("pointerdown", handlePointerDown)
+    container.addEventListener("pointermove", handlePointerMove)
+    container.addEventListener("pointerup", handlePointerUp)
+
+    return () => {
+      container.removeEventListener("pointerdown", handlePointerDown)
+      container.removeEventListener("pointermove", handlePointerMove)
+      container.removeEventListener("pointerup", handlePointerUp)
     }
   }, [])
 
+  // 语音控制
   useEffect(() => {
-    generateMindMap()
-  }, [query])
+    if (typeof window !== "undefined" && "webkitSpeechRecognition" in window) {
+      const recognition = new (window as any).webkitSpeechRecognition()
+      recognition.continuous = true
+      recognition.lang = "zh-CN"
 
-  useEffect(() => {
-    if (autoPlay && mindMapData) {
-      startAutoPlay()
-    } else {
-      stopAutoPlay()
-    }
-    return () => stopAutoPlay()
-  }, [autoPlay, mindMapData, playSpeed])
+      recognition.onresult = (event: any) => {
+        const command = event.results[event.results.length - 1][0].transcript.toLowerCase()
 
-  const generateMindMap = async () => {
-    setIsLoading(true)
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 2000))
-
-      const mockData: MindMapData = {
-        title: query || "知识图谱",
-        nodes: [
-          {
-            id: "root",
-            text: query || "主题",
-            x: 400,
-            y: 300,
-            level: 0,
-            children: [],
-            color: themes[selectedTheme as keyof typeof themes].primary,
-            expanded: true,
-          },
-          {
-            id: "concept1",
-            text: "基本概念",
-            x: 200,
-            y: 200,
-            level: 1,
-            children: [],
-            parent: "root",
-            color: themes[selectedTheme as keyof typeof themes].secondary,
-            expanded: true,
-          },
-          {
-            id: "concept2",
-            text: "应用场景",
-            x: 600,
-            y: 200,
-            level: 1,
-            children: [],
-            parent: "root",
-            color: themes[selectedTheme as keyof typeof themes].secondary,
-            expanded: true,
-          },
-          {
-            id: "concept3",
-            text: "技术原理",
-            x: 200,
-            y: 400,
-            level: 1,
-            children: [],
-            parent: "root",
-            color: themes[selectedTheme as keyof typeof themes].secondary,
-            expanded: true,
-          },
-          {
-            id: "concept4",
-            text: "发展趋势",
-            x: 600,
-            y: 400,
-            level: 1,
-            children: [],
-            parent: "root",
-            color: themes[selectedTheme as keyof typeof themes].secondary,
-            expanded: true,
-          },
-          {
-            id: "detail1",
-            text: "定义与特征",
-            x: 100,
-            y: 150,
-            level: 2,
-            children: [],
-            parent: "concept1",
-            color: themes[selectedTheme as keyof typeof themes].accent,
-            expanded: false,
-          },
-          {
-            id: "detail2",
-            text: "核心要素",
-            x: 100,
-            y: 250,
-            level: 2,
-            children: [],
-            parent: "concept1",
-            color: themes[selectedTheme as keyof typeof themes].accent,
-            expanded: false,
-          },
-          {
-            id: "detail3",
-            text: "实际案例",
-            x: 700,
-            y: 150,
-            level: 2,
-            children: [],
-            parent: "concept2",
-            color: themes[selectedTheme as keyof typeof themes].accent,
-            expanded: false,
-          },
-          {
-            id: "detail4",
-            text: "行业应用",
-            x: 700,
-            y: 250,
-            level: 2,
-            children: [],
-            parent: "concept2",
-            color: themes[selectedTheme as keyof typeof themes].accent,
-            expanded: false,
-          },
-        ],
-        connections: [
-          { from: "root", to: "concept1" },
-          { from: "root", to: "concept2" },
-          { from: "root", to: "concept3" },
-          { from: "root", to: "concept4" },
-          { from: "concept1", to: "detail1" },
-          { from: "concept1", to: "detail2" },
-          { from: "concept2", to: "detail3" },
-          { from: "concept2", to: "detail4" },
-        ],
-      }
-
-      setMindMapData(mockData)
-    } catch (error) {
-      console.error("生成思维导图失败:", error)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const handleNodeClick = (nodeId: string) => {
-    if (!mindMapData) return
-
-    setCurrentNode(nodeId)
-    const node = mindMapData.nodes.find((n) => n.id === nodeId)
-    if (node && speechSynthesis.current) {
-      const utterance = new SpeechSynthesisUtterance(node.text)
-      utterance.lang = "zh-CN"
-      speechSynthesis.current.speak(utterance)
-    }
-
-    const updatedNodes = mindMapData.nodes.map((node) => {
-      if (node.id === nodeId) {
-        return { ...node, expanded: !node.expanded }
-      }
-      return node
-    })
-
-    setMindMapData({ ...mindMapData, nodes: updatedNodes })
-  }
-
-  const startAutoPlay = () => {
-    if (!mindMapData) return
-
-    let currentIndex = 0
-    const nodes = mindMapData.nodes
-
-    playIntervalRef.current = setInterval(() => {
-      if (currentIndex < nodes.length) {
-        setCurrentNode(nodes[currentIndex].id)
-        if (speechSynthesis.current) {
-          const utterance = new SpeechSynthesisUtterance(nodes[currentIndex].text)
-          utterance.lang = "zh-CN"
-          speechSynthesis.current.speak(utterance)
+        if (command.includes("放大")) {
+          setScale((prev) => Math.min(3, prev * 1.2))
+        } else if (command.includes("缩小")) {
+          setScale((prev) => Math.max(0.5, prev * 0.8))
+        } else if (command.includes("重置")) {
+          setScale(1)
+          setOffset({ x: 0, y: 0 })
+        } else if (command.includes("返回")) {
+          router.back()
         }
-        currentIndex++
-      } else {
-        setAutoPlay(false)
-        setCurrentNode(null)
       }
-    }, playSpeed)
-  }
 
-  const stopAutoPlay = () => {
-    if (playIntervalRef.current) {
-      clearInterval(playIntervalRef.current)
-      playIntervalRef.current = null
+      recognition.onstart = () => setIsListening(true)
+      recognition.onend = () => setIsListening(false)
+
+      recognition.start()
+
+      return () => recognition.stop()
     }
-    if (speechSynthesis.current) {
-      speechSynthesis.current.cancel()
-    }
-  }
+  }, [router])
 
-  const handleZoomIn = () => {
-    setZoom((prev) => Math.min(prev * 1.2, 3))
-  }
+  // 绘制思维导图
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas || nodes.length === 0) return
 
-  const handleZoomOut = () => {
-    setZoom((prev) => Math.max(prev / 1.2, 0.3))
-  }
-
-  const handleReset = () => {
-    setZoom(1)
-    setPan({ x: 0, y: 0 })
-    setCurrentNode(null)
-  }
-
-  const handleDownload = () => {
-    if (!svgRef.current) return
-
-    const svgData = new XMLSerializer().serializeToString(svgRef.current)
-    const canvas = document.createElement("canvas")
     const ctx = canvas.getContext("2d")
-    const img = new Image()
+    if (!ctx) return
 
-    canvas.width = 1200
-    canvas.height = 800
+    // 设置画布大小
+    canvas.width = canvas.offsetWidth * window.devicePixelRatio
+    canvas.height = canvas.offsetHeight * window.devicePixelRatio
+    ctx.scale(window.devicePixelRatio, window.devicePixelRatio)
 
-    img.onload = () => {
-      if (ctx) {
-        ctx.fillStyle = themes[selectedTheme as keyof typeof themes].background
-        ctx.fillRect(0, 0, canvas.width, canvas.height)
-        ctx.drawImage(img, 0, 0)
+    // 清空画布
+    ctx.clearRect(0, 0, canvas.offsetWidth, canvas.offsetHeight)
 
-        const link = document.createElement("a")
-        link.download = `mindmap-${Date.now()}.png`
-        link.href = canvas.toDataURL()
-        link.click()
+    // 应用变换
+    ctx.save()
+    ctx.translate(offset.x, offset.y)
+    ctx.scale(scale, scale)
+
+    // 绘制连接线
+    nodes.forEach((node) => {
+      if (node.parent) {
+        const parent = nodes.find((n) => n.id === node.parent)
+        if (parent) {
+          ctx.beginPath()
+          ctx.moveTo(parent.x, parent.y)
+          ctx.lineTo(node.x, node.y)
+          ctx.strokeStyle = node.color + "40"
+          ctx.lineWidth = 2
+          ctx.stroke()
+        }
       }
-    }
-
-    img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svgData)))
-  }
-
-  const handleShare = async () => {
-    const shareData = {
-      title: `思维导图: ${mindMapData?.title}`,
-      text: `查看这个关于"${query}"的思维导图`,
-      url: window.location.href,
-    }
-
-    try {
-      if (navigator.share) {
-        await navigator.share(shareData)
-      } else {
-        await navigator.clipboard.writeText(window.location.href)
-        alert("链接已复制到剪贴板")
-      }
-    } catch (error) {
-      console.error("分享失败:", error)
-    }
-  }
-
-  const renderConnections = () => {
-    if (!mindMapData) return null
-
-    return mindMapData.connections.map((conn, index) => {
-      const fromNode = mindMapData.nodes.find((n) => n.id === conn.from)
-      const toNode = mindMapData.nodes.find((n) => n.id === conn.to)
-
-      if (!fromNode || !toNode || !toNode.expanded) return null
-
-      return (
-        <line
-          key={index}
-          x1={fromNode.x}
-          y1={fromNode.y}
-          x2={toNode.x}
-          y2={toNode.y}
-          stroke={themes[selectedTheme as keyof typeof themes].primary}
-          strokeWidth="2"
-          opacity="0.6"
-        />
-      )
     })
-  }
 
-  const renderNodes = () => {
-    if (!mindMapData) return null
+    // 绘制节点
+    nodes.forEach((node) => {
+      const isSelected = selectedNode === node.id
+      const radius = node.level === 0 ? 60 : node.level === 1 ? 40 : 30
 
-    return mindMapData.nodes.map((node) => {
-      if (node.level > 1 && node.parent) {
-        const parentNode = mindMapData.nodes.find((n) => n.id === node.parent)
-        if (!parentNode?.expanded) return null
+      // 绘制节点背景
+      ctx.beginPath()
+      ctx.arc(node.x, node.y, radius, 0, 2 * Math.PI)
+      ctx.fillStyle = node.color + (isSelected ? "FF" : "80")
+      ctx.fill()
+
+      if (isSelected) {
+        ctx.strokeStyle = "#FFFFFF"
+        ctx.lineWidth = 3
+        ctx.stroke()
       }
 
-      const isActive = currentNode === node.id
-      const radius = node.level === 0 ? 60 : node.level === 1 ? 45 : 35
+      // 绘制文本
+      ctx.fillStyle = "#FFFFFF"
+      ctx.font = `${node.level === 0 ? 16 : node.level === 1 ? 14 : 12}px sans-serif`
+      ctx.textAlign = "center"
+      ctx.textBaseline = "middle"
 
-      return (
-        <g key={node.id}>
-          <circle
-            cx={node.x}
-            cy={node.y}
-            r={radius}
-            fill={node.color}
-            stroke={isActive ? "#ff6b6b" : "transparent"}
-            strokeWidth={isActive ? "4" : "0"}
-            className="cursor-pointer transition-all duration-300 hover:opacity-80"
-            onClick={() => handleNodeClick(node.id)}
-          />
-          <text
-            x={node.x}
-            y={node.y}
-            textAnchor="middle"
-            dominantBaseline="middle"
-            fill="white"
-            fontSize={node.level === 0 ? "16" : node.level === 1 ? "14" : "12"}
-            fontWeight="bold"
-            className="cursor-pointer select-none"
-            onClick={() => handleNodeClick(node.id)}
-          >
-            {node.text.length > 8 ? node.text.substring(0, 8) + "..." : node.text}
-          </text>
-          {node.children.length > 0 && (
-            <circle
-              cx={node.x + radius - 10}
-              cy={node.y - radius + 10}
-              r="8"
-              fill={node.expanded ? "#10b981" : "#6b7280"}
-              className="cursor-pointer"
-              onClick={() => handleNodeClick(node.id)}
-            />
-          )}
-        </g>
-      )
+      // 文本换行
+      const words = node.text.split("")
+      const maxWidth = radius * 1.5
+      let line = ""
+      let y = node.y
+
+      for (let i = 0; i < words.length; i++) {
+        const testLine = line + words[i]
+        const metrics = ctx.measureText(testLine)
+
+        if (metrics.width > maxWidth && i > 0) {
+          ctx.fillText(line, node.x, y)
+          line = words[i]
+          y += 16
+        } else {
+          line = testLine
+        }
+      }
+      ctx.fillText(line, node.x, y)
     })
+
+    ctx.restore()
+  }, [nodes, selectedNode, scale, offset])
+
+  // 节点点击处理
+  const handleCanvasClick = (e: React.MouseEvent) => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    const rect = canvas.getBoundingClientRect()
+    const x = (e.clientX - rect.left - offset.x) / scale
+    const y = (e.clientY - rect.top - offset.y) / scale
+
+    // 查找点击的节点
+    const clickedNode = nodes.find((node) => {
+      const radius = node.level === 0 ? 60 : node.level === 1 ? 40 : 30
+      const distance = Math.sqrt((x - node.x) ** 2 + (y - node.y) ** 2)
+      return distance <= radius
+    })
+
+    if (clickedNode) {
+      setSelectedNode(clickedNode.id)
+      if ("vibrate" in navigator) {
+        navigator.vibrate(100)
+      }
+    } else {
+      setSelectedNode(null)
+    }
   }
 
-  if (isLoading) {
+  if (isGenerating) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
         <div className="text-center">
-          <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600 text-lg mb-2">正在生成思维导图...</p>
-          <p className="text-gray-500 text-sm">分析内容结构中，请稍候</p>
+          <div className="relative mb-8">
+            <div className="w-24 h-24 border-4 border-purple-400/30 rounded-full animate-spin border-t-purple-400"></div>
+            <Brain className="w-10 h-10 text-purple-400 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 animate-pulse" />
+          </div>
+          <h2 className="text-2xl font-bold text-white mb-4">AI正在生成思维导图</h2>
+          <p className="text-gray-400 mb-2">分析概念结构中...</p>
+          <p className="text-gray-400">构建知识关联...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200 px-4 py-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <Button variant="ghost" size="sm" onClick={() => router.back()}>
-              <ArrowLeft className="w-5 h-5 mr-2" />
-              返回
-            </Button>
-            <h1 className="text-xl font-semibold text-gray-900">思维导图: {mindMapData?.title}</h1>
+    <div
+      ref={containerRef}
+      className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 relative overflow-hidden"
+    >
+      {/* 顶部工具栏 */}
+      <div className="absolute top-0 left-0 right-0 z-20 bg-black/20 backdrop-blur-sm border-b border-white/10">
+        <div className="flex items-center justify-between px-6 py-4">
+          <div className="flex items-center space-x-4">
+            <button
+              onClick={() => router.back()}
+              className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+            >
+              <ArrowLeft className="w-5 h-5 text-white" />
+            </button>
+            <h1 className="text-xl font-bold text-white">{query} - 思维导图</h1>
           </div>
 
           <div className="flex items-center space-x-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setAutoPlay(!autoPlay)}
-              className={autoPlay ? "text-red-600" : "text-green-600"}
-            >
-              {autoPlay ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
-            </Button>
-
-            <Button variant="ghost" size="sm" onClick={() => speechSynthesis.current?.cancel()}>
-              <VolumeX className="w-5 h-5" />
-            </Button>
-
-            <Button variant="ghost" size="sm" onClick={handleDownload}>
-              <Download className="w-5 h-5" />
-            </Button>
-
-            <Button variant="ghost" size="sm" onClick={handleShare}>
-              <Share2 className="w-5 h-5" />
-            </Button>
-
-            <Button variant="ghost" size="sm" onClick={() => setShowSettings(!showSettings)}>
-              <Settings className="w-5 h-5" />
-            </Button>
+            <button className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors">
+              <Download className="w-5 h-5 text-white" />
+            </button>
+            <button className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors">
+              <Share2 className="w-5 h-5 text-white" />
+            </button>
           </div>
         </div>
-      </header>
+      </div>
 
-      <div className="flex h-[calc(100vh-73px)]">
-        <div className="flex-1 relative overflow-hidden">
-          <div className="absolute top-4 left-4 z-10 flex space-x-2">
-            <Button variant="outline" size="sm" onClick={handleZoomIn}>
-              <ZoomIn className="w-4 h-4" />
-            </Button>
-            <Button variant="outline" size="sm" onClick={handleZoomOut}>
-              <ZoomOut className="w-4 h-4" />
-            </Button>
-            <Button variant="outline" size="sm" onClick={handleReset}>
-              <RotateCcw className="w-4 h-4" />
-            </Button>
-            <Badge variant="outline" className="px-3 py-1">
-              {Math.round(zoom * 100)}%
-            </Badge>
-          </div>
+      {/* 思维导图画布 */}
+      <canvas
+        ref={canvasRef}
+        onClick={handleCanvasClick}
+        className="absolute inset-0 w-full h-full cursor-grab active:cursor-grabbing"
+        style={{ top: "80px", height: "calc(100vh - 80px)" }}
+      />
 
-          <div
-            className="w-full h-full overflow-auto"
-            style={{
-              background: themes[selectedTheme as keyof typeof themes].background,
-              cursor: "grab",
-            }}
-          >
-            <svg
-              ref={svgRef}
-              width="1200"
-              height="800"
-              style={{
-                transform: `scale(${zoom}) translate(${pan.x}px, ${pan.y}px)`,
-                transformOrigin: "center center",
-              }}
-              className="transition-transform duration-200"
-            >
-              {renderConnections()}
-              {renderNodes()}
-            </svg>
-          </div>
+      {/* 缩放控制 */}
+      <div className="absolute bottom-8 left-8 flex flex-col space-y-2">
+        <button
+          onClick={() => setScale((prev) => Math.min(3, prev * 1.2))}
+          className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center text-white hover:bg-white/20 transition-colors"
+        >
+          +
+        </button>
+        <div className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center text-white text-sm">
+          {Math.round(scale * 100)}%
         </div>
+        <button
+          onClick={() => setScale((prev) => Math.max(0.5, prev * 0.8))}
+          className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center text-white hover:bg-white/20 transition-colors"
+        >
+          -
+        </button>
+      </div>
 
-        {showSettings && (
-          <div className="w-80 bg-white border-l border-gray-200 p-6 overflow-y-auto">
-            <div className="space-y-6">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">设置</h3>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">主题</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {Object.entries(themes).map(([key, theme]) => (
-                    <button
-                      key={key}
-                      onClick={() => setSelectedTheme(key)}
-                      className={`p-3 rounded-lg border-2 transition-all ${
-                        selectedTheme === key ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:border-gray-300"
-                      }`}
-                    >
-                      <div className="flex space-x-1 mb-2">
-                        <div className="w-4 h-4 rounded" style={{ backgroundColor: theme.primary }} />
-                        <div className="w-4 h-4 rounded" style={{ backgroundColor: theme.secondary }} />
-                        <div className="w-4 h-4 rounded" style={{ backgroundColor: theme.accent }} />
-                      </div>
-                      <span className="text-xs font-medium capitalize">{key}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">自动播放速度 (毫秒)</label>
-                <Input
-                  type="number"
-                  value={playSpeed}
-                  onChange={(e) => setPlaySpeed(Number(e.target.value))}
-                  min="1000"
-                  max="10000"
-                  step="500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">当前节点</label>
-                <div className="p-3 bg-gray-50 rounded-lg">
-                  {currentNode ? (
-                    <div>
-                      <p className="font-medium">{mindMapData?.nodes.find((n) => n.id === currentNode)?.text}</p>
-                      <p className="text-sm text-gray-600 mt-1">
-                        级别: {mindMapData?.nodes.find((n) => n.id === currentNode)?.level}
-                      </p>
-                    </div>
-                  ) : (
-                    <p className="text-gray-500">未选择节点</p>
-                  )}
-                </div>
-              </div>
-
-              <div>
-                <h4 className="font-medium text-gray-900 mb-3">操作指南</h4>
-                <div className="space-y-2 text-sm text-gray-600">
-                  <p>• 点击节点查看详情</p>
-                  <p>• 使用缩放控制调整视图</p>
-                  <p>• 启用自动播放浏览全图</p>
-                  <p>• 选择不同主题改变外观</p>
-                </div>
-              </div>
-            </div>
+      {/* 状态指示器 */}
+      <div className="absolute bottom-8 right-8 flex flex-col space-y-2">
+        {isListening && (
+          <div className="bg-red-500/20 backdrop-blur-sm rounded-full p-3 border border-red-400/30">
+            <Mic className="w-5 h-5 text-red-400 animate-pulse" />
           </div>
         )}
+        {gestureMode !== "idle" && (
+          <div className="bg-blue-500/20 backdrop-blur-sm rounded-full p-3 border border-blue-400/30">
+            <Hand className="w-5 h-5 text-blue-400" />
+          </div>
+        )}
+        {selectedNode && (
+          <div className="bg-purple-500/20 backdrop-blur-sm rounded-full p-3 border border-purple-400/30">
+            <Eye className="w-5 h-5 text-purple-400" />
+          </div>
+        )}
+      </div>
+
+      {/* 节点详情面板 */}
+      {selectedNode && (
+        <div className="absolute top-24 right-8 w-80 bg-black/40 backdrop-blur-xl rounded-2xl border border-white/20 p-6">
+          <h3 className="text-lg font-bold text-white mb-4">{nodes.find((n) => n.id === selectedNode)?.text}</h3>
+          <p className="text-gray-300 text-sm mb-4">
+            这是关于"{nodes.find((n) => n.id === selectedNode)?.text}"的详细说明和相关信息。
+          </p>
+          <div className="flex space-x-2">
+            <button className="px-4 py-2 bg-purple-500/20 rounded-lg text-purple-300 text-sm hover:bg-purple-500/30 transition-colors">
+              展开详情
+            </button>
+            <button className="px-4 py-2 bg-blue-500/20 rounded-lg text-blue-300 text-sm hover:bg-blue-500/30 transition-colors">
+              添加子节点
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 交互提示 */}
+      <div className="absolute top-24 left-8 bg-black/40 backdrop-blur-xl rounded-2xl border border-white/20 p-4">
+        <div className="text-white text-sm space-y-1">
+          <p>🖱️ 拖拽: 移动视图</p>
+          <p>🤏 双指: 缩放</p>
+          <p>🗣️ 语音: "放大"、"缩小"、"重置"</p>
+          <p>👆 点击: 选择节点</p>
+        </div>
       </div>
     </div>
   )

@@ -1,329 +1,413 @@
 "use client"
 
-import type React from "react"
-
-import { useState, useRef, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Card, CardContent } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import {
-  Search,
-  Upload,
-  Sparkles,
-  Brain,
-  FileText,
-  ImageIcon,
-  Presentation,
-  Globe,
-  History,
-  Settings,
-  User,
-  Lightbulb,
-  BookOpen,
-  Users,
-  Zap,
-  TrendingUp,
-  Clock,
-} from "lucide-react"
+import { Search, Sparkles, Brain, Mic, Eye, Hand, Zap } from "lucide-react"
 
 export default function HomePage() {
-  const router = useRouter()
   const [query, setQuery] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
-  const [recentSearches, setRecentSearches] = useState<string[]>([])
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [isListening, setIsListening] = useState(false)
+  const [isGazing, setIsGazing] = useState(false)
+  const [gestureMode, setGestureMode] = useState<"idle" | "pan" | "pinch" | "swipe">("idle")
+  const [voiceCommand, setVoiceCommand] = useState("")
+  const [contextualActions, setContextualActions] = useState<string[]>([])
+  const [userIntent, setUserIntent] = useState<"search" | "generate" | "learn" | null>(null)
 
-  const quickActions = [
-    {
-      id: "mindmap",
-      title: "思维导图",
-      description: "生成知识结构图",
-      icon: <Brain className="w-6 h-6" />,
-      color: "bg-purple-500",
-      path: "/generate/mindmap",
-    },
-    {
-      id: "summary",
-      title: "智能总结",
-      description: "提取关键信息",
-      icon: <FileText className="w-6 h-6" />,
-      color: "bg-blue-500",
-      path: "/thinking",
-    },
-    {
-      id: "poster",
-      title: "海报生成",
-      description: "创建精美海报",
-      icon: <ImageIcon className="w-6 h-6" />,
-      color: "bg-green-500",
-      path: "/generate/poster",
-    },
-    {
-      id: "ppt",
-      title: "PPT制作",
-      description: "自动生成演示文稿",
-      icon: <Presentation className="w-6 h-6" />,
-      color: "bg-orange-500",
-      path: "/generate/ppt",
-    },
-    {
-      id: "webpage",
-      title: "网页生成",
-      description: "创建交互式网页",
-      icon: <Globe className="w-6 h-6" />,
-      color: "bg-pink-500",
-      path: "/generate/webpage",
-    },
-    {
-      id: "learning",
-      title: "学习路径",
-      description: "个性化学习计划",
-      icon: <BookOpen className="w-6 h-6" />,
-      color: "bg-indigo-500",
-      path: "/learning-path/create",
-    },
-  ]
+  const containerRef = useRef<HTMLDivElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const router = useRouter()
 
-  const trendingTopics = [
-    "人工智能发展趋势",
-    "量子计算原理",
-    "区块链技术应用",
-    "机器学习算法",
-    "数据科学方法",
-    "云计算架构",
-  ]
-
+  // 语音识别系统
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const saved = localStorage.getItem("recentSearches")
-        if (saved) {
-          const parsed = JSON.parse(saved)
-          if (Array.isArray(parsed)) {
-            setRecentSearches(parsed)
+    if (typeof window !== "undefined" && "webkitSpeechRecognition" in window) {
+      const recognition = new (window as any).webkitSpeechRecognition()
+      recognition.continuous = true
+      recognition.interimResults = true
+      recognition.lang = "zh-CN"
+
+      recognition.onresult = (event: any) => {
+        let finalTranscript = ""
+        let interimTranscript = ""
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript
+          if (event.results[i].isFinal) {
+            finalTranscript += transcript
+          } else {
+            interimTranscript += transcript
           }
         }
-      } catch (error) {
-        console.error("Error loading recent searches:", error)
-        setRecentSearches([])
+
+        if (finalTranscript) {
+          handleVoiceCommand(finalTranscript)
+        }
+        setVoiceCommand(interimTranscript)
       }
+
+      recognition.onstart = () => setIsListening(true)
+      recognition.onend = () => setIsListening(false)
+
+      // 自动启动语音识别
+      recognition.start()
+
+      return () => recognition.stop()
     }
   }, [])
 
-  const handleSearch = async (searchQuery?: string) => {
-    const finalQuery = searchQuery || query
-    if (!finalQuery || !finalQuery.trim()) return
+  // 手势识别系统
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
 
-    setIsLoading(true)
+    let startX = 0,
+      startY = 0,
+      currentX = 0,
+      currentY = 0
+    let isPointerDown = false
+    let gestureStartTime = 0
 
-    try {
-      const updatedSearches = [finalQuery, ...recentSearches.filter((s) => s !== finalQuery)].slice(0, 10)
-      setRecentSearches(updatedSearches)
+    const handlePointerDown = (e: PointerEvent) => {
+      isPointerDown = true
+      startX = currentX = e.clientX
+      startY = currentY = e.clientY
+      gestureStartTime = Date.now()
 
-      if (typeof window !== "undefined") {
-        localStorage.setItem("recentSearches", JSON.stringify(updatedSearches))
+      // 触觉反馈
+      if ("vibrate" in navigator) {
+        navigator.vibrate(50)
+      }
+    }
+
+    const handlePointerMove = (e: PointerEvent) => {
+      if (!isPointerDown) return
+
+      currentX = e.clientX
+      currentY = e.clientY
+
+      const deltaX = currentX - startX
+      const deltaY = currentY - startY
+      const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY)
+
+      if (distance > 50) {
+        if (Math.abs(deltaX) > Math.abs(deltaY)) {
+          setGestureMode(deltaX > 0 ? "swipe" : "swipe")
+          handleSwipeGesture(deltaX > 0 ? "right" : "left")
+        } else {
+          setGestureMode(deltaY > 0 ? "pan" : "pan")
+          handlePanGesture(deltaY > 0 ? "down" : "up")
+        }
+      }
+    }
+
+    const handlePointerUp = () => {
+      isPointerDown = false
+      const gestureTime = Date.now() - gestureStartTime
+
+      if (gestureTime < 200) {
+        handleTapGesture()
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-      router.push(`/results?query=${encodeURIComponent(finalQuery)}`)
-    } catch (error) {
-      console.error("Search failed:", error)
-    } finally {
-      setIsLoading(false)
+      setTimeout(() => setGestureMode("idle"), 300)
     }
-  }
 
-  const handleQuickAction = (action: any) => {
-    if (query && query.trim()) {
-      router.push(`${action.path}?query=${encodeURIComponent(query)}`)
+    container.addEventListener("pointerdown", handlePointerDown)
+    container.addEventListener("pointermove", handlePointerMove)
+    container.addEventListener("pointerup", handlePointerUp)
+
+    return () => {
+      container.removeEventListener("pointerdown", handlePointerDown)
+      container.removeEventListener("pointermove", handlePointerMove)
+      container.removeEventListener("pointerup", handlePointerUp)
+    }
+  }, [])
+
+  // 眼动追踪模拟（基于鼠标位置）
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      const centerX = window.innerWidth / 2
+      const centerY = window.innerHeight / 2
+      const distance = Math.sqrt((e.clientX - centerX) ** 2 + (e.clientY - centerY) ** 2)
+
+      if (distance < 100) {
+        setIsGazing(true)
+        setTimeout(() => {
+          if (distance < 100) {
+            handleGazeActivation()
+          }
+        }, 2000)
+      } else {
+        setIsGazing(false)
+      }
+    }
+
+    window.addEventListener("mousemove", handleMouseMove)
+    return () => window.removeEventListener("mousemove", handleMouseMove)
+  }, [])
+
+  // 上下文感知系统
+  useEffect(() => {
+    const analyzeContext = () => {
+      const actions = []
+
+      if (query.includes("思维导图") || query.includes("结构")) {
+        actions.push("生成思维导图")
+        setUserIntent("generate")
+      }
+      if (query.includes("学习") || query.includes("教程")) {
+        actions.push("创建学习路径")
+        setUserIntent("learn")
+      }
+      if (query.includes("PPT") || query.includes("演示")) {
+        actions.push("制作演示文稿")
+        setUserIntent("generate")
+      }
+      if (query.length > 0) {
+        actions.push("智能搜索")
+        if (!userIntent) setUserIntent("search")
+      }
+
+      setContextualActions(actions)
+    }
+
+    const debounce = setTimeout(analyzeContext, 300)
+    return () => clearTimeout(debounce)
+  }, [query, userIntent])
+
+  // 语音命令处理
+  const handleVoiceCommand = (command: string) => {
+    const lowerCommand = command.toLowerCase()
+
+    if (lowerCommand.includes("搜索") || lowerCommand.includes("查找")) {
+      const searchQuery = command.replace(/搜索|查找/g, "").trim()
+      if (searchQuery) {
+        setQuery(searchQuery)
+        executeSearch(searchQuery)
+      }
+    } else if (lowerCommand.includes("思维导图")) {
+      router.push("/generate/mindmap?voice=true")
+    } else if (lowerCommand.includes("学习路径")) {
+      router.push("/learning-path/create?voice=true")
+    } else if (lowerCommand.includes("清空")) {
+      setQuery("")
     } else {
-      router.push(action.path)
+      setQuery(command)
     }
   }
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (file) {
-      setQuery(`分析文件: ${file.name}`)
+  // 手势处理
+  const handleSwipeGesture = (direction: "left" | "right") => {
+    if (direction === "right" && contextualActions.length > 0) {
+      executeContextualAction(contextualActions[0])
+    } else if (direction === "left") {
+      setQuery("")
+      setUserIntent(null)
+    }
+  }
+
+  const handlePanGesture = (direction: "up" | "down") => {
+    if (direction === "up" && query) {
+      executeSearch(query)
+    } else if (direction === "down") {
+      router.push("/history")
+    }
+  }
+
+  const handleTapGesture = () => {
+    if (textareaRef.current) {
+      textareaRef.current.focus()
+    }
+  }
+
+  // 注视激活
+  const handleGazeActivation = () => {
+    if (query && userIntent) {
+      executeSearch(query)
+    }
+  }
+
+  // 执行搜索
+  const executeSearch = (searchQuery: string) => {
+    if (!searchQuery.trim()) return
+
+    // 触觉反馈
+    if ("vibrate" in navigator) {
+      navigator.vibrate([100, 50, 100])
+    }
+
+    router.push(`/results?q=${encodeURIComponent(searchQuery)}&mode=${userIntent || "search"}`)
+  }
+
+  // 执行上下文操作
+  const executeContextualAction = (action: string) => {
+    switch (action) {
+      case "生成思维导图":
+        router.push(`/generate/mindmap?q=${encodeURIComponent(query)}`)
+        break
+      case "创建学习路径":
+        router.push(`/learning-path/create?concept=${encodeURIComponent(query)}`)
+        break
+      case "制作演示文稿":
+        router.push(`/generate/ppt?q=${encodeURIComponent(query)}`)
+        break
+      case "智能搜索":
+        executeSearch(query)
+        break
     }
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
-      <header className="bg-white/80 backdrop-blur-md border-b border-gray-200 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-gradient-to-r from-purple-600 to-blue-600 rounded-xl flex items-center justify-center">
-                <Sparkles className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-gray-900">YanYu AI</h1>
-                <p className="text-sm text-gray-600">智能搜索与内容生成平台</p>
-              </div>
-            </div>
+    <div
+      ref={containerRef}
+      className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 relative overflow-hidden"
+      style={{
+        background: `radial-gradient(circle at ${isGazing ? "50% 50%" : "30% 70%"}, rgba(139, 92, 246, 0.3) 0%, transparent 50%)`,
+      }}
+    >
+      {/* 动态背景粒子 */}
+      <div className="absolute inset-0 overflow-hidden">
+        {Array.from({ length: 50 }).map((_, i) => (
+          <div
+            key={i}
+            className="absolute w-1 h-1 bg-white/20 rounded-full animate-pulse"
+            style={{
+              left: `${Math.random() * 100}%`,
+              top: `${Math.random() * 100}%`,
+              animationDelay: `${Math.random() * 3}s`,
+              animationDuration: `${2 + Math.random() * 3}s`,
+            }}
+          />
+        ))}
+      </div>
 
-            <div className="flex items-center space-x-3">
-              <Button variant="ghost" size="sm" onClick={() => router.push("/history")}>
-                <History className="w-5 h-5 mr-2" />
-                历史记录
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => router.push("/settings")}>
-                <Settings className="w-5 h-5 mr-2" />
-                设置
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => router.push("/auth/login")}>
-                <User className="w-5 h-5 mr-2" />
-                登录
-              </Button>
-            </div>
+      {/* 主要内容区域 */}
+      <div className="relative z-10 flex flex-col items-center justify-center min-h-screen px-4">
+        {/* 标题区域 - 响应式动画 */}
+        <div
+          className={`text-center mb-12 transition-all duration-1000 ${
+            query ? "transform -translate-y-8 scale-90" : ""
+          }`}
+        >
+          <h1 className="text-6xl md:text-8xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 mb-6">
+            YYC³ AI
+          </h1>
+          <p className="text-xl md:text-2xl text-gray-300 mb-4">无边界智能交互中心</p>
+          <div className="flex items-center justify-center space-x-4 text-sm text-gray-400">
+            <span className={`flex items-center ${isListening ? "text-red-400" : ""}`}>
+              <Mic className="w-4 h-4 mr-1" />
+              语音{isListening ? "监听中" : "待命"}
+            </span>
+            <span className={`flex items-center ${gestureMode !== "idle" ? "text-blue-400" : ""}`}>
+              <Hand className="w-4 h-4 mr-1" />
+              手势{gestureMode !== "idle" ? "识别中" : "待命"}
+            </span>
+            <span className={`flex items-center ${isGazing ? "text-green-400" : ""}`}>
+              <Eye className="w-4 h-4 mr-1" />
+              注视{isGazing ? "激活中" : "待命"}
+            </span>
           </div>
         </div>
-      </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-8">
-        <div className="text-center mb-12">
-          <h2 className="text-4xl font-bold text-gray-900 mb-4">
-            探索知识的
-            <span className="bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">无限可能</span>
-          </h2>
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            通过AI驱动的智能搜索和内容生成，让学习和创作变得更加高效
-          </p>
-        </div>
-
-        <div className="max-w-4xl mx-auto mb-12">
-          <div className="relative mb-6">
-            <Input
-              type="text"
-              placeholder="输入您想了解的任何内容..."
+        {/* 智能输入区域 */}
+        <div className="w-full max-w-4xl relative">
+          <div
+            className={`relative bg-white/10 backdrop-blur-xl rounded-3xl border border-white/20 transition-all duration-500 ${
+              query ? "shadow-2xl shadow-purple-500/25" : "shadow-lg"
+            }`}
+          >
+            <textarea
+              ref={textareaRef}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              onKeyPress={(e) => e.key === "Enter" && handleSearch()}
-              className="w-full h-14 pl-6 pr-32 text-lg border-2 border-gray-200 rounded-2xl focus:border-purple-500 focus:ring-purple-500"
+              placeholder="说出您的想法，或直接开始输入..."
+              className="w-full px-8 py-6 bg-transparent text-white placeholder-gray-400 text-lg md:text-xl resize-none outline-none min-h-[120px]"
+              rows={3}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault()
+                  executeSearch(query)
+                }
+              }}
             />
-            <div className="absolute right-2 top-2 flex items-center space-x-2">
-              <Button variant="ghost" size="sm" onClick={() => fileInputRef.current?.click()} className="h-10 px-3">
-                <Upload className="w-5 h-5" />
-              </Button>
-              <Button
-                onClick={() => handleSearch()}
-                disabled={isLoading || !query.trim()}
-                className="h-10 px-6 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 rounded-xl"
-              >
-                {isLoading ? (
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <Search className="w-5 h-5" />
-                )}
-              </Button>
-            </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              onChange={handleFileUpload}
-              className="hidden"
-              accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.gif"
-            />
-          </div>
-        </div>
 
-        <div className="mb-12">
-          <h3 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
-            <Zap className="w-6 h-6 mr-2 text-purple-600" />
-            快速操作
-          </h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-            {quickActions.map((action) => (
-              <Card
-                key={action.id}
-                className="border-gray-200 cursor-pointer hover:shadow-lg transition-all duration-200 hover:scale-105"
-                onClick={() => handleQuickAction(action)}
-              >
-                <CardContent className="p-6 text-center">
-                  <div
-                    className={`w-12 h-12 ${action.color} rounded-xl flex items-center justify-center mx-auto mb-3 text-white`}
-                  >
-                    {action.icon}
-                  </div>
-                  <h4 className="font-semibold text-gray-900 mb-1">{action.title}</h4>
-                  <p className="text-sm text-gray-600">{action.description}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
+            {/* 语音实时反馈 */}
+            {voiceCommand && (
+              <div className="absolute bottom-4 left-8 text-sm text-blue-300 animate-pulse">
+                语音输入: {voiceCommand}
+              </div>
+            )}
 
-        {recentSearches.length > 0 && (
-          <div className="mb-12">
-            <h3 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
-              <Clock className="w-6 h-6 mr-2 text-blue-600" />
-              最近搜索
-            </h3>
-            <div className="flex flex-wrap gap-2">
-              {recentSearches.slice(0, 8).map((search, index) => (
-                <Badge
-                  key={index}
-                  variant="outline"
-                  className="px-4 py-2 cursor-pointer hover:bg-gray-100 transition-colors"
-                  onClick={() => handleSearch(search)}
+            {/* 手势状态指示 */}
+            {gestureMode !== "idle" && (
+              <div className="absolute top-4 right-8 text-sm text-blue-300">
+                {gestureMode === "swipe" && "滑动手势"}
+                {gestureMode === "pan" && "拖拽手势"}
+                {gestureMode === "pinch" && "缩放手势"}
+              </div>
+            )}
+          </div>
+
+          {/* 上下文感知操作提示 */}
+          {contextualActions.length > 0 && (
+            <div className="mt-6 flex flex-wrap justify-center gap-3">
+              {contextualActions.map((action, index) => (
+                <div
+                  key={action}
+                  onClick={() => executeContextualAction(action)}
+                  className={`px-6 py-3 bg-gradient-to-r from-purple-500/20 to-blue-500/20 backdrop-blur-sm rounded-2xl border border-white/10 text-white cursor-pointer transition-all duration-300 hover:scale-105 hover:shadow-lg ${
+                    index === 0 ? "ring-2 ring-purple-400/50" : ""
+                  }`}
                 >
-                  {search}
-                </Badge>
+                  <div className="flex items-center space-x-2">
+                    {action.includes("思维导图") && <Brain className="w-4 h-4" />}
+                    {action.includes("搜索") && <Search className="w-4 h-4" />}
+                    {action.includes("学习") && <Sparkles className="w-4 h-4" />}
+                    <span>{action}</span>
+                  </div>
+                  {index === 0 && <div className="text-xs text-gray-400 mt-1">右滑或注视2秒激活</div>}
+                </div>
               ))}
             </div>
-          </div>
-        )}
+          )}
 
-        <div className="mb-12">
-          <h3 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
-            <TrendingUp className="w-6 h-6 mr-2 text-green-600" />
-            热门话题
-          </h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            {trendingTopics.map((topic, index) => (
-              <Button
-                key={index}
-                variant="outline"
-                className="h-auto p-4 text-left justify-start hover:bg-purple-50 hover:border-purple-300 bg-transparent"
-                onClick={() => handleSearch(topic)}
-              >
-                <div className="flex items-center space-x-2">
-                  <span className="text-sm font-medium text-purple-600">#{index + 1}</span>
-                  <span className="text-sm">{topic}</span>
-                </div>
-              </Button>
-            ))}
+          {/* 交互提示 */}
+          <div className="mt-8 text-center text-gray-400 text-sm space-y-2">
+            <div className="flex items-center justify-center space-x-6">
+              <span>🗣️ 语音: 直接说话</span>
+              <span>👆 手势: 上滑搜索</span>
+              <span>👀 注视: 中心区域2秒</span>
+            </div>
+            <div className="flex items-center justify-center space-x-6">
+              <span>➡️ 右滑: 执行建议</span>
+              <span>⬅️ 左滑: 清空内容</span>
+              <span>⬇️ 下滑: 查看历史</span>
+            </div>
           </div>
         </div>
 
-        <div className="text-center">
-          <Card className="border-gray-200 bg-gradient-to-r from-purple-50 to-blue-50">
-            <CardContent className="p-8">
-              <Lightbulb className="w-16 h-16 text-purple-600 mx-auto mb-4" />
-              <h3 className="text-2xl font-bold text-gray-900 mb-4">开始您的AI之旅</h3>
-              <p className="text-gray-600 mb-6 max-w-2xl mx-auto">
-                无论是学习新知识、创作内容还是解决问题，YanYu AI都能为您提供智能化的解决方案。
-              </p>
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Button
-                  onClick={() => router.push("/learning")}
-                  className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 px-8 py-3"
-                >
-                  <BookOpen className="w-5 h-5 mr-2" />
-                  开始学习
-                </Button>
-                <Button variant="outline" onClick={() => router.push("/community")} className="px-8 py-3">
-                  <Users className="w-5 h-5 mr-2" />
-                  加入社区
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+        {/* 智能状态指示器 */}
+        <div className="fixed bottom-8 right-8 flex flex-col space-y-2">
+          {isListening && (
+            <div className="bg-red-500/20 backdrop-blur-sm rounded-full p-3 border border-red-400/30">
+              <Mic className="w-5 h-5 text-red-400 animate-pulse" />
+            </div>
+          )}
+          {gestureMode !== "idle" && (
+            <div className="bg-blue-500/20 backdrop-blur-sm rounded-full p-3 border border-blue-400/30">
+              <Hand className="w-5 h-5 text-blue-400" />
+            </div>
+          )}
+          {isGazing && (
+            <div className="bg-green-500/20 backdrop-blur-sm rounded-full p-3 border border-green-400/30">
+              <Eye className="w-5 h-5 text-green-400 animate-pulse" />
+            </div>
+          )}
+          {userIntent && (
+            <div className="bg-purple-500/20 backdrop-blur-sm rounded-full p-3 border border-purple-400/30">
+              <Zap className="w-5 h-5 text-purple-400" />
+            </div>
+          )}
         </div>
-      </main>
+      </div>
     </div>
   )
 }

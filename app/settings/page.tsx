@@ -2,174 +2,252 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Switch } from "@/components/ui/switch"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Textarea } from "@/components/ui/textarea"
+import { useState, useEffect, useRef } from "react"
+import { useRouter } from "next/navigation"
 import {
   ArrowLeft,
-  User,
-  Bell,
-  Shield,
+  Settings,
   Palette,
+  Eye,
+  Hand,
+  Mic,
+  Moon,
+  Sun,
+  Monitor,
+  Globe,
+  Shield,
   Database,
-  Zap,
+  Trash2,
   Download,
   Upload,
-  Trash2,
-  Save,
-  RefreshCw,
 } from "lucide-react"
-import { useRouter } from "next/navigation"
-import { useTheme } from "next-themes"
+import { gestureUtils, voiceUtils } from "@/lib/utils"
 
-interface UserSettings {
-  profile: {
-    displayName: string
-    email: string
-    bio: string
-    avatar: string
-  }
-  preferences: {
-    language: string
-    theme: string
-    timezone: string
-    dateFormat: string
-  }
-  notifications: {
-    email: boolean
-    push: boolean
-    marketing: boolean
-    searchReminders: boolean
-  }
-  privacy: {
-    profileVisibility: string
-    searchHistory: boolean
-    analytics: boolean
-    dataSharing: boolean
-  }
-  ai: {
-    model: string
-    temperature: number
-    maxTokens: number
-    enableStreaming: boolean
-  }
-  storage: {
-    autoBackup: boolean
-    backupFrequency: string
-    maxStorageSize: number
-  }
+interface SettingsState {
+  // 交互设置
+  voiceEnabled: boolean
+  gestureEnabled: boolean
+  eyeTrackingEnabled: boolean
+  hapticFeedback: boolean
+  voiceVolume: number
+  gestureSensitivity: number
+
+  // 界面设置
+  theme: "light" | "dark" | "auto"
+  language: "zh-CN" | "en-US"
+  fontSize: "small" | "medium" | "large"
+  animationSpeed: "slow" | "normal" | "fast"
+
+  // 隐私设置
+  dataCollection: boolean
+  personalizedRecommendations: boolean
+  voiceDataStorage: boolean
+  analyticsEnabled: boolean
+
+  // 高级设置
+  autoSave: boolean
+  offlineMode: boolean
+  debugMode: boolean
 }
 
 export default function SettingsPage() {
-  const [settings, setSettings] = useState<UserSettings>({
-    profile: {
-      displayName: "用户",
-      email: "user@example.com",
-      bio: "",
-      avatar: "/diverse-avatars.png",
-    },
-    preferences: {
-      language: "zh-CN",
-      theme: "auto",
-      timezone: "Asia/Shanghai",
-      dateFormat: "YYYY-MM-DD",
-    },
-    notifications: {
-      email: true,
-      push: true,
-      marketing: false,
-      searchReminders: true,
-    },
-    privacy: {
-      profileVisibility: "public",
-      searchHistory: true,
-      analytics: true,
-      dataSharing: false,
-    },
-    ai: {
-      model: "gpt-4",
-      temperature: 0.7,
-      maxTokens: 2048,
-      enableStreaming: true,
-    },
-    storage: {
-      autoBackup: true,
-      backupFrequency: "daily",
-      maxStorageSize: 1024,
-    },
+  const router = useRouter()
+  const [settings, setSettings] = useState<SettingsState>({
+    // 交互设置
+    voiceEnabled: true,
+    gestureEnabled: true,
+    eyeTrackingEnabled: true,
+    hapticFeedback: true,
+    voiceVolume: 80,
+    gestureSensitivity: 70,
+
+    // 界面设置
+    theme: "dark",
+    language: "zh-CN",
+    fontSize: "medium",
+    animationSpeed: "normal",
+
+    // 隐私设置
+    dataCollection: true,
+    personalizedRecommendations: true,
+    voiceDataStorage: false,
+    analyticsEnabled: true,
+
+    // 高级设置
+    autoSave: true,
+    offlineMode: false,
+    debugMode: false,
   })
 
-  const [loading, setLoading] = useState(false)
-  const [saved, setSaved] = useState(false)
-  const router = useRouter()
-  const { theme, setTheme } = useTheme()
+  const [activeSection, setActiveSection] = useState<"interaction" | "interface" | "privacy" | "advanced">(
+    "interaction",
+  )
+  const [isListening, setIsListening] = useState(false)
+  const [gestureMode, setGestureMode] = useState<"idle" | "swipe">("idle")
+  const [hasChanges, setHasChanges] = useState(false)
 
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  // 监听设置变化
   useEffect(() => {
-    loadSettings()
-  }, [])
+    setHasChanges(true)
+  }, [settings])
 
-  const loadSettings = () => {
-    try {
-      const savedSettings = localStorage.getItem("userSettings")
-      if (savedSettings) {
-        setSettings(JSON.parse(savedSettings))
+  // 手势控制
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+
+    let startX = 0,
+      startY = 0
+    let isPointerDown = false
+
+    const handlePointerDown = (e: PointerEvent) => {
+      isPointerDown = true
+      startX = e.clientX
+      startY = e.clientY
+      setGestureMode("swipe")
+    }
+
+    const handlePointerMove = (e: PointerEvent) => {
+      if (!isPointerDown) return
+
+      const deltaX = e.clientX - startX
+      const deltaY = e.clientY - startY
+
+      if (Math.abs(deltaX) > 100) {
+        if (deltaX > 0) {
+          // 右滑返回
+          router.back()
+          isPointerDown = false
+        }
       }
-    } catch (error) {
-      console.error("加载设置失败:", error)
+
+      if (Math.abs(deltaY) > 100) {
+        const sections = ["interaction", "interface", "privacy", "advanced"]
+        const currentIndex = sections.indexOf(activeSection)
+
+        if (deltaY > 0 && currentIndex > 0) {
+          // 下滑 - 上一个部分
+          setActiveSection(sections[currentIndex - 1] as any)
+        } else if (deltaY < 0 && currentIndex < sections.length - 1) {
+          // 上滑 - 下一个部分
+          setActiveSection(sections[currentIndex + 1] as any)
+        }
+        isPointerDown = false
+      }
+    }
+
+    const handlePointerUp = () => {
+      isPointerDown = false
+      setTimeout(() => setGestureMode("idle"), 300)
+    }
+
+    container.addEventListener("pointerdown", handlePointerDown)
+    container.addEventListener("pointermove", handlePointerMove)
+    container.addEventListener("pointerup", handlePointerUp)
+
+    return () => {
+      container.removeEventListener("pointerdown", handlePointerDown)
+      container.removeEventListener("pointermove", handlePointerMove)
+      container.removeEventListener("pointerup", handlePointerUp)
+    }
+  }, [activeSection, router])
+
+  // 语音控制
+  useEffect(() => {
+    if (!settings.voiceEnabled) return
+
+    const recognition = voiceUtils.initSpeechRecognition(
+      (transcript) => {
+        const command = transcript.toLowerCase()
+
+        if (command.includes("交互设置")) {
+          setActiveSection("interaction")
+        } else if (command.includes("界面设置")) {
+          setActiveSection("interface")
+        } else if (command.includes("隐私设置")) {
+          setActiveSection("privacy")
+        } else if (command.includes("高级设置")) {
+          setActiveSection("advanced")
+        } else if (command.includes("保存设置")) {
+          saveSettings()
+        } else if (command.includes("返回")) {
+          router.back()
+        }
+      },
+      () => setIsListening(true),
+      () => setIsListening(false),
+    )
+
+    recognition?.start()
+    return () => recognition?.stop()
+  }, [settings.voiceEnabled, router])
+
+  // 更新设置
+  const updateSetting = <K extends keyof SettingsState>(key: K, value: SettingsState[K]) => {
+    setSettings((prev) => ({ ...prev, [key]: value }))
+
+    // 触觉反馈
+    if (settings.hapticFeedback) {
+      gestureUtils.hapticFeedback(50)
     }
   }
 
-  const saveSettings = async () => {
-    setLoading(true)
-    try {
-      localStorage.setItem("userSettings", JSON.stringify(settings))
+  // 保存设置
+  const saveSettings = () => {
+    localStorage.setItem("yyc-ai-settings", JSON.stringify(settings))
+    setHasChanges(false)
 
-      // 应用主题设置
-      if (settings.preferences.theme !== theme) {
-        setTheme(settings.preferences.theme)
-      }
-
-      setSaved(true)
-      setTimeout(() => setSaved(false), 2000)
-    } catch (error) {
-      console.error("保存设置失败:", error)
-      alert("保存设置失败，请稍后重试")
-    } finally {
-      setLoading(false)
+    if (settings.hapticFeedback) {
+      gestureUtils.hapticFeedback([100, 50, 100])
     }
+
+    voiceUtils.speak("设置已保存")
   }
 
+  // 重置设置
   const resetSettings = () => {
-    if (confirm("确定要重置所有设置吗？此操作不可撤销。")) {
-      localStorage.removeItem("userSettings")
-      window.location.reload()
+    const defaultSettings: SettingsState = {
+      voiceEnabled: true,
+      gestureEnabled: true,
+      eyeTrackingEnabled: true,
+      hapticFeedback: true,
+      voiceVolume: 80,
+      gestureSensitivity: 70,
+      theme: "dark",
+      language: "zh-CN",
+      fontSize: "medium",
+      animationSpeed: "normal",
+      dataCollection: true,
+      personalizedRecommendations: true,
+      voiceDataStorage: false,
+      analyticsEnabled: true,
+      autoSave: true,
+      offlineMode: false,
+      debugMode: false,
+    }
+
+    setSettings(defaultSettings)
+
+    if (settings.hapticFeedback) {
+      gestureUtils.hapticFeedback([100, 100, 100])
     }
   }
 
+  // 导出设置
   const exportSettings = () => {
-    try {
-      const dataStr = JSON.stringify(settings, null, 2)
-      const dataBlob = new Blob([dataStr], { type: "application/json" })
-      const url = URL.createObjectURL(dataBlob)
-      const link = document.createElement("a")
-      link.href = url
-      link.download = "settings.json"
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      URL.revokeObjectURL(url)
-    } catch (error) {
-      console.error("导出设置失败:", error)
-      alert("导出设置失败")
-    }
+    const dataStr = JSON.stringify(settings, null, 2)
+    const dataBlob = new Blob([dataStr], { type: "application/json" })
+    const url = URL.createObjectURL(dataBlob)
+    const link = document.createElement("a")
+    link.href = url
+    link.download = "yyc-ai-settings.json"
+    link.click()
+    URL.revokeObjectURL(url)
   }
 
+  // 导入设置
   const importSettings = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
@@ -179,553 +257,545 @@ export default function SettingsPage() {
       try {
         const importedSettings = JSON.parse(e.target?.result as string)
         setSettings(importedSettings)
-        alert("设置导入成功")
+        voiceUtils.speak("设置导入成功")
       } catch (error) {
-        console.error("导入设置失败:", error)
-        alert("导入设置失败：文件格式不正确")
+        voiceUtils.speak("设置导入失败")
       }
     }
     reader.readAsText(file)
   }
 
-  const clearData = (dataType: string) => {
-    if (confirm(`确定要清除所有${dataType}吗？此操作不可撤销。`)) {
-      switch (dataType) {
-        case "搜索历史":
-          localStorage.removeItem("ai-search-history")
-          break
-        case "收藏":
-          localStorage.removeItem("favorites")
-          break
-        case "缓存":
-          // 清除所有缓存
-          Object.keys(localStorage).forEach((key) => {
-            if (key.startsWith("cache_")) {
-              localStorage.removeItem(key)
-            }
-          })
-          break
-      }
-      alert(`${dataType}已清除`)
-    }
-  }
-
-  const updateSettings = (section: keyof UserSettings, key: string, value: any) => {
-    setSettings((prev) => ({
-      ...prev,
-      [section]: {
-        ...prev[section],
-        [key]: value,
-      },
-    }))
-  }
-
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* 顶部导航 */}
-      <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center space-x-4">
-              <Button variant="ghost" size="sm" onClick={() => router.back()}>
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                返回
-              </Button>
-              <h1 className="text-xl font-semibold text-gray-900 dark:text-white">设置</h1>
-            </div>
-
-            <div className="flex items-center space-x-2">
-              <Button
-                onClick={saveSettings}
-                disabled={loading}
-                className={saved ? "bg-green-600 hover:bg-green-700" : ""}
-              >
-                {loading ? (
-                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                ) : saved ? (
-                  <Save className="w-4 h-4 mr-2" />
-                ) : (
-                  <Save className="w-4 h-4 mr-2" />
-                )}
-                {saved ? "已保存" : "保存设置"}
-              </Button>
+    <div ref={containerRef} className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+      {/* 顶部工具栏 */}
+      <div className="bg-black/20 backdrop-blur-xl border-b border-white/10 px-6 py-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <button
+              onClick={() => router.back()}
+              className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+            >
+              <ArrowLeft className="w-5 h-5 text-white" />
+            </button>
+            <div className="flex items-center space-x-3">
+              <Settings className="w-8 h-8 text-purple-400" />
+              <h1 className="text-xl font-bold text-white">设置中心</h1>
             </div>
           </div>
+
+          <div className="flex items-center space-x-2">
+            {hasChanges && (
+              <button
+                onClick={saveSettings}
+                className="px-4 py-2 bg-green-500/20 hover:bg-green-500/30 border border-green-400/30 rounded-lg text-green-400 text-sm transition-colors"
+              >
+                保存更改
+              </button>
+            )}
+
+            <button
+              onClick={resetSettings}
+              className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-400/30 rounded-lg text-red-400 text-sm transition-colors"
+            >
+              重置
+            </button>
+          </div>
         </div>
-      </header>
 
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <Tabs defaultValue="profile" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-6">
-            <TabsTrigger value="profile" className="flex items-center space-x-2">
-              <User className="w-4 h-4" />
-              <span className="hidden sm:inline">个人资料</span>
-            </TabsTrigger>
-            <TabsTrigger value="preferences" className="flex items-center space-x-2">
-              <Palette className="w-4 h-4" />
-              <span className="hidden sm:inline">偏好设置</span>
-            </TabsTrigger>
-            <TabsTrigger value="notifications" className="flex items-center space-x-2">
-              <Bell className="w-4 h-4" />
-              <span className="hidden sm:inline">通知</span>
-            </TabsTrigger>
-            <TabsTrigger value="privacy" className="flex items-center space-x-2">
-              <Shield className="w-4 h-4" />
-              <span className="hidden sm:inline">隐私</span>
-            </TabsTrigger>
-            <TabsTrigger value="ai" className="flex items-center space-x-2">
-              <Zap className="w-4 h-4" />
-              <span className="hidden sm:inline">AI设置</span>
-            </TabsTrigger>
-            <TabsTrigger value="data" className="flex items-center space-x-2">
-              <Database className="w-4 h-4" />
-              <span className="hidden sm:inline">数据</span>
-            </TabsTrigger>
-          </TabsList>
+        {/* 导航标签 */}
+        <div className="flex space-x-1 mt-4 bg-white/5 rounded-lg p-1">
+          {[
+            { key: "interaction", label: "交互", icon: Hand },
+            { key: "interface", label: "界面", icon: Palette },
+            { key: "privacy", label: "隐私", icon: Shield },
+            { key: "advanced", label: "高级", icon: Settings },
+          ].map(({ key, label, icon: Icon }) => (
+            <button
+              key={key}
+              onClick={() => setActiveSection(key as any)}
+              className={`flex-1 flex items-center justify-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
+                activeSection === key
+                  ? "bg-purple-500/20 text-purple-400 border border-purple-400/30"
+                  : "text-gray-400 hover:text-white hover:bg-white/10"
+              }`}
+            >
+              <Icon className="w-4 h-4" />
+              <span className="text-sm font-medium">{label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
 
-          {/* 个人资料 */}
-          <TabsContent value="profile">
-            <Card>
-              <CardHeader>
-                <CardTitle>个人资料</CardTitle>
-                <CardDescription>管理您的个人信息和头像</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="flex items-center space-x-6">
-                  <div className="w-20 h-20 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center overflow-hidden">
-                    <img
-                      src={settings.profile.avatar || "/placeholder.svg"}
-                      alt="头像"
-                      className="w-full h-full object-cover"
+      {/* 设置内容 */}
+      <div className="px-6 py-6">
+        {/* 交互设置 */}
+        {activeSection === "interaction" && (
+          <div className="space-y-6">
+            <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-6">
+              <h3 className="text-lg font-medium text-white mb-4 flex items-center">
+                <Mic className="w-5 h-5 mr-2 text-blue-400" />
+                语音交互
+              </h3>
+
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-300">启用语音控制</span>
+                  <button
+                    onClick={() => updateSetting("voiceEnabled", !settings.voiceEnabled)}
+                    className={`relative w-12 h-6 rounded-full transition-colors ${
+                      settings.voiceEnabled ? "bg-green-500" : "bg-gray-600"
+                    }`}
+                  >
+                    <div
+                      className={`absolute w-5 h-5 bg-white rounded-full top-0.5 transition-transform ${
+                        settings.voiceEnabled ? "translate-x-6" : "translate-x-0.5"
+                      }`}
                     />
-                  </div>
-                  <div>
-                    <Button variant="outline" size="sm">
-                      更换头像
-                    </Button>
-                    <p className="text-sm text-gray-500 mt-1">支持 JPG、PNG 格式，最大 2MB</p>
-                  </div>
+                  </button>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <Label htmlFor="displayName">显示名称</Label>
-                    <Input
-                      id="displayName"
-                      value={settings.profile.displayName}
-                      onChange={(e) => updateSettings("profile", "displayName", e.target.value)}
-                    />
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-300">语音音量</span>
+                    <span className="text-purple-400">{settings.voiceVolume}%</span>
                   </div>
-                  <div>
-                    <Label htmlFor="email">邮箱地址</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      value={settings.profile.email}
-                      onChange={(e) => updateSettings("profile", "email", e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <Label htmlFor="bio">个人简介</Label>
-                  <Textarea
-                    id="bio"
-                    placeholder="介绍一下自己..."
-                    value={settings.profile.bio}
-                    onChange={(e) => updateSettings("profile", "bio", e.target.value)}
-                    rows={3}
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={settings.voiceVolume}
+                    onChange={(e) => updateSetting("voiceVolume", Number.parseInt(e.target.value))}
+                    className="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer slider"
                   />
                 </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
+              </div>
+            </div>
 
-          {/* 偏好设置 */}
-          <TabsContent value="preferences">
-            <Card>
-              <CardHeader>
-                <CardTitle>偏好设置</CardTitle>
-                <CardDescription>自定义您的使用体验</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <Label htmlFor="language">语言</Label>
-                    <Select
-                      value={settings.preferences.language}
-                      onValueChange={(value) => updateSettings("preferences", "language", value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="zh-CN">简体中文</SelectItem>
-                        <SelectItem value="zh-TW">繁體中文</SelectItem>
-                        <SelectItem value="en-US">English</SelectItem>
-                        <SelectItem value="ja-JP">日本語</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+            <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-6">
+              <h3 className="text-lg font-medium text-white mb-4 flex items-center">
+                <Hand className="w-5 h-5 mr-2 text-green-400" />
+                手势控制
+              </h3>
 
-                  <div>
-                    <Label htmlFor="theme">主题</Label>
-                    <Select
-                      value={settings.preferences.theme}
-                      onValueChange={(value) => updateSettings("preferences", "theme", value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="light">浅色</SelectItem>
-                        <SelectItem value="dark">深色</SelectItem>
-                        <SelectItem value="auto">跟随系统</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="timezone">时区</Label>
-                    <Select
-                      value={settings.preferences.timezone}
-                      onValueChange={(value) => updateSettings("preferences", "timezone", value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Asia/Shanghai">北京时间 (UTC+8)</SelectItem>
-                        <SelectItem value="Asia/Tokyo">东京时间 (UTC+9)</SelectItem>
-                        <SelectItem value="America/New_York">纽约时间 (UTC-5)</SelectItem>
-                        <SelectItem value="Europe/London">伦敦时间 (UTC+0)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="dateFormat">日期格式</Label>
-                    <Select
-                      value={settings.preferences.dateFormat}
-                      onValueChange={(value) => updateSettings("preferences", "dateFormat", value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="YYYY-MM-DD">2024-01-01</SelectItem>
-                        <SelectItem value="MM/DD/YYYY">01/01/2024</SelectItem>
-                        <SelectItem value="DD/MM/YYYY">01/01/2024</SelectItem>
-                        <SelectItem value="YYYY年MM月DD日">2024年01月01日</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* 通知设置 */}
-          <TabsContent value="notifications">
-            <Card>
-              <CardHeader>
-                <CardTitle>通知设置</CardTitle>
-                <CardDescription>管理您接收通知的方式</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label htmlFor="email-notifications">邮件通知</Label>
-                      <p className="text-sm text-gray-500">接收重要更新和提醒</p>
-                    </div>
-                    <Switch
-                      id="email-notifications"
-                      checked={settings.notifications.email}
-                      onCheckedChange={(checked) => updateSettings("notifications", "email", checked)}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-300">启用手势识别</span>
+                  <button
+                    onClick={() => updateSetting("gestureEnabled", !settings.gestureEnabled)}
+                    className={`relative w-12 h-6 rounded-full transition-colors ${
+                      settings.gestureEnabled ? "bg-green-500" : "bg-gray-600"
+                    }`}
+                  >
+                    <div
+                      className={`absolute w-5 h-5 bg-white rounded-full top-0.5 transition-transform ${
+                        settings.gestureEnabled ? "translate-x-6" : "translate-x-0.5"
+                      }`}
                     />
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label htmlFor="push-notifications">推送通知</Label>
-                      <p className="text-sm text-gray-500">浏览器推送通知</p>
-                    </div>
-                    <Switch
-                      id="push-notifications"
-                      checked={settings.notifications.push}
-                      onCheckedChange={(checked) => updateSettings("notifications", "push", checked)}
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label htmlFor="marketing-notifications">营销通知</Label>
-                      <p className="text-sm text-gray-500">产品更新和促销信息</p>
-                    </div>
-                    <Switch
-                      id="marketing-notifications"
-                      checked={settings.notifications.marketing}
-                      onCheckedChange={(checked) => updateSettings("notifications", "marketing", checked)}
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label htmlFor="search-reminders">搜索提醒</Label>
-                      <p className="text-sm text-gray-500">定期搜索建议和提醒</p>
-                    </div>
-                    <Switch
-                      id="search-reminders"
-                      checked={settings.notifications.searchReminders}
-                      onCheckedChange={(checked) => updateSettings("notifications", "searchReminders", checked)}
-                    />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* 隐私设置 */}
-          <TabsContent value="privacy">
-            <Card>
-              <CardHeader>
-                <CardTitle>隐私设置</CardTitle>
-                <CardDescription>控制您的数据和隐私</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="profile-visibility">个人资料可见性</Label>
-                    <Select
-                      value={settings.privacy.profileVisibility}
-                      onValueChange={(value) => updateSettings("privacy", "profileVisibility", value)}
-                    >
-                      <SelectTrigger className="mt-2">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="public">公开</SelectItem>
-                        <SelectItem value="friends">仅好友</SelectItem>
-                        <SelectItem value="private">私密</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label htmlFor="search-history">保存搜索历史</Label>
-                      <p className="text-sm text-gray-500">允许保存和分析搜索记录</p>
-                    </div>
-                    <Switch
-                      id="search-history"
-                      checked={settings.privacy.searchHistory}
-                      onCheckedChange={(checked) => updateSettings("privacy", "searchHistory", checked)}
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label htmlFor="analytics">使用分析</Label>
-                      <p className="text-sm text-gray-500">帮助改进产品体验</p>
-                    </div>
-                    <Switch
-                      id="analytics"
-                      checked={settings.privacy.analytics}
-                      onCheckedChange={(checked) => updateSettings("privacy", "analytics", checked)}
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label htmlFor="data-sharing">数据共享</Label>
-                      <p className="text-sm text-gray-500">与第三方服务共享匿名数据</p>
-                    </div>
-                    <Switch
-                      id="data-sharing"
-                      checked={settings.privacy.dataSharing}
-                      onCheckedChange={(checked) => updateSettings("privacy", "dataSharing", checked)}
-                    />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* AI设置 */}
-          <TabsContent value="ai">
-            <Card>
-              <CardHeader>
-                <CardTitle>AI设置</CardTitle>
-                <CardDescription>配置AI模型和参数</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div>
-                  <Label htmlFor="ai-model">AI模型</Label>
-                  <Select value={settings.ai.model} onValueChange={(value) => updateSettings("ai", "model", value)}>
-                    <SelectTrigger className="mt-2">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="gpt-4">GPT-4 (推荐)</SelectItem>
-                      <SelectItem value="gpt-3.5-turbo">GPT-3.5 Turbo</SelectItem>
-                      <SelectItem value="claude-3">Claude 3</SelectItem>
-                      <SelectItem value="local">本地模型</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  </button>
                 </div>
 
-                <div>
-                  <Label htmlFor="temperature">创造性 (Temperature)</Label>
-                  <div className="mt-2">
-                    <input
-                      type="range"
-                      id="temperature"
-                      min="0"
-                      max="1"
-                      step="0.1"
-                      value={settings.ai.temperature}
-                      onChange={(e) => updateSettings("ai", "temperature", Number.parseFloat(e.target.value))}
-                      className="w-full"
-                    />
-                    <div className="flex justify-between text-sm text-gray-500 mt-1">
-                      <span>保守 (0)</span>
-                      <span>当前: {settings.ai.temperature}</span>
-                      <span>创新 (1)</span>
-                    </div>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-300">手势灵敏度</span>
+                    <span className="text-green-400">{settings.gestureSensitivity}%</span>
                   </div>
-                </div>
-
-                <div>
-                  <Label htmlFor="max-tokens">最大令牌数</Label>
-                  <Input
-                    id="max-tokens"
-                    type="number"
-                    min="100"
-                    max="4096"
-                    value={settings.ai.maxTokens}
-                    onChange={(e) => updateSettings("ai", "maxTokens", Number.parseInt(e.target.value))}
-                    className="mt-2"
+                  <input
+                    type="range"
+                    min="10"
+                    max="100"
+                    value={settings.gestureSensitivity}
+                    onChange={(e) => updateSetting("gestureSensitivity", Number.parseInt(e.target.value))}
+                    className="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer slider"
                   />
-                  <p className="text-sm text-gray-500 mt-1">控制回答长度，更高的值允许更长的回答</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-6">
+              <h3 className="text-lg font-medium text-white mb-4 flex items-center">
+                <Eye className="w-5 h-5 mr-2 text-orange-400" />
+                其他交互
+              </h3>
+
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-300">眼动追踪</span>
+                  <button
+                    onClick={() => updateSetting("eyeTrackingEnabled", !settings.eyeTrackingEnabled)}
+                    className={`relative w-12 h-6 rounded-full transition-colors ${
+                      settings.eyeTrackingEnabled ? "bg-green-500" : "bg-gray-600"
+                    }`}
+                  >
+                    <div
+                      className={`absolute w-5 h-5 bg-white rounded-full top-0.5 transition-transform ${
+                        settings.eyeTrackingEnabled ? "translate-x-6" : "translate-x-0.5"
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-300">触觉反馈</span>
+                  <button
+                    onClick={() => updateSetting("hapticFeedback", !settings.hapticFeedback)}
+                    className={`relative w-12 h-6 rounded-full transition-colors ${
+                      settings.hapticFeedback ? "bg-green-500" : "bg-gray-600"
+                    }`}
+                  >
+                    <div
+                      className={`absolute w-5 h-5 bg-white rounded-full top-0.5 transition-transform ${
+                        settings.hapticFeedback ? "translate-x-6" : "translate-x-0.5"
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 界面设置 */}
+        {activeSection === "interface" && (
+          <div className="space-y-6">
+            <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-6">
+              <h3 className="text-lg font-medium text-white mb-4 flex items-center">
+                <Palette className="w-5 h-5 mr-2 text-purple-400" />
+                主题外观
+              </h3>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-gray-300 mb-2">主题模式</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { key: "light", label: "浅色", icon: Sun },
+                      { key: "dark", label: "深色", icon: Moon },
+                      { key: "auto", label: "自动", icon: Monitor },
+                    ].map(({ key, label, icon: Icon }) => (
+                      <button
+                        key={key}
+                        onClick={() => updateSetting("theme", key as any)}
+                        className={`flex items-center justify-center space-x-2 p-3 rounded-lg transition-colors ${
+                          settings.theme === key
+                            ? "bg-purple-500/20 text-purple-400 border border-purple-400/30"
+                            : "bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white"
+                        }`}
+                      >
+                        <Icon className="w-4 h-4" />
+                        <span className="text-sm">{label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-gray-300 mb-2">字体大小</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { key: "small", label: "小" },
+                      { key: "medium", label: "中" },
+                      { key: "large", label: "大" },
+                    ].map(({ key, label }) => (
+                      <button
+                        key={key}
+                        onClick={() => updateSetting("fontSize", key as any)}
+                        className={`p-3 rounded-lg transition-colors ${
+                          settings.fontSize === key
+                            ? "bg-purple-500/20 text-purple-400 border border-purple-400/30"
+                            : "bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white"
+                        }`}
+                      >
+                        <span className={`${key === "small" ? "text-sm" : key === "large" ? "text-lg" : "text-base"}`}>
+                          {label}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-gray-300 mb-2">动画速度</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { key: "slow", label: "慢速" },
+                      { key: "normal", label: "正常" },
+                      { key: "fast", label: "快速" },
+                    ].map(({ key, label }) => (
+                      <button
+                        key={key}
+                        onClick={() => updateSetting("animationSpeed", key as any)}
+                        className={`p-3 rounded-lg transition-colors ${
+                          settings.animationSpeed === key
+                            ? "bg-purple-500/20 text-purple-400 border border-purple-400/30"
+                            : "bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white"
+                        }`}
+                      >
+                        <span className="text-sm">{label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-6">
+              <h3 className="text-lg font-medium text-white mb-4 flex items-center">
+                <Globe className="w-5 h-5 mr-2 text-blue-400" />
+                语言设置
+              </h3>
+
+              <div>
+                <label className="block text-gray-300 mb-2">界面语言</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { key: "zh-CN", label: "简体中文" },
+                    { key: "en-US", label: "English" },
+                  ].map(({ key, label }) => (
+                    <button
+                      key={key}
+                      onClick={() => updateSetting("language", key as any)}
+                      className={`p-3 rounded-lg transition-colors ${
+                        settings.language === key
+                          ? "bg-blue-500/20 text-blue-400 border border-blue-400/30"
+                          : "bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white"
+                      }`}
+                    >
+                      <span className="text-sm">{label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 隐私设置 */}
+        {activeSection === "privacy" && (
+          <div className="space-y-6">
+            <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-6">
+              <h3 className="text-lg font-medium text-white mb-4 flex items-center">
+                <Shield className="w-5 h-5 mr-2 text-green-400" />
+                数据隐私
+              </h3>
+
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-gray-300 block">数据收集</span>
+                    <span className="text-sm text-gray-400">允许收集使用数据以改进服务</span>
+                  </div>
+                  <button
+                    onClick={() => updateSetting("dataCollection", !settings.dataCollection)}
+                    className={`relative w-12 h-6 rounded-full transition-colors ${
+                      settings.dataCollection ? "bg-green-500" : "bg-gray-600"
+                    }`}
+                  >
+                    <div
+                      className={`absolute w-5 h-5 bg-white rounded-full top-0.5 transition-transform ${
+                        settings.dataCollection ? "translate-x-6" : "translate-x-0.5"
+                      }`}
+                    />
+                  </button>
                 </div>
 
                 <div className="flex items-center justify-between">
                   <div>
-                    <Label htmlFor="streaming">流式输出</Label>
-                    <p className="text-sm text-gray-500">实时显示AI回答过程</p>
+                    <span className="text-gray-300 block">个性化推荐</span>
+                    <span className="text-sm text-gray-400">基于使用习惯提供个性化内容</span>
                   </div>
-                  <Switch
-                    id="streaming"
-                    checked={settings.ai.enableStreaming}
-                    onCheckedChange={(checked) => updateSettings("ai", "enableStreaming", checked)}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* 数据管理 */}
-          <TabsContent value="data">
-            <div className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>数据备份</CardTitle>
-                  <CardDescription>管理您的数据备份和恢复</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label htmlFor="auto-backup">自动备份</Label>
-                      <p className="text-sm text-gray-500">定期自动备份您的数据</p>
-                    </div>
-                    <Switch
-                      id="auto-backup"
-                      checked={settings.storage.autoBackup}
-                      onCheckedChange={(checked) => updateSettings("storage", "autoBackup", checked)}
+                  <button
+                    onClick={() => updateSetting("personalizedRecommendations", !settings.personalizedRecommendations)}
+                    className={`relative w-12 h-6 rounded-full transition-colors ${
+                      settings.personalizedRecommendations ? "bg-green-500" : "bg-gray-600"
+                    }`}
+                  >
+                    <div
+                      className={`absolute w-5 h-5 bg-white rounded-full top-0.5 transition-transform ${
+                        settings.personalizedRecommendations ? "translate-x-6" : "translate-x-0.5"
+                      }`}
                     />
-                  </div>
+                  </button>
+                </div>
 
+                <div className="flex items-center justify-between">
                   <div>
-                    <Label htmlFor="backup-frequency">备份频率</Label>
-                    <Select
-                      value={settings.storage.backupFrequency}
-                      onValueChange={(value) => updateSettings("storage", "backupFrequency", value)}
-                    >
-                      <SelectTrigger className="mt-2">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="daily">每日</SelectItem>
-                        <SelectItem value="weekly">每周</SelectItem>
-                        <SelectItem value="monthly">每月</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <span className="text-gray-300 block">语音数据存储</span>
+                    <span className="text-sm text-gray-400">本地存储语音数据用于改进识别</span>
                   </div>
+                  <button
+                    onClick={() => updateSetting("voiceDataStorage", !settings.voiceDataStorage)}
+                    className={`relative w-12 h-6 rounded-full transition-colors ${
+                      settings.voiceDataStorage ? "bg-green-500" : "bg-gray-600"
+                    }`}
+                  >
+                    <div
+                      className={`absolute w-5 h-5 bg-white rounded-full top-0.5 transition-transform ${
+                        settings.voiceDataStorage ? "translate-x-6" : "translate-x-0.5"
+                      }`}
+                    />
+                  </button>
+                </div>
 
-                  <div className="flex space-x-4">
-                    <Button onClick={exportSettings} variant="outline">
-                      <Download className="w-4 h-4 mr-2" />
-                      导出设置
-                    </Button>
-                    <label>
-                      <Button variant="outline" asChild>
-                        <span>
-                          <Upload className="w-4 h-4 mr-2" />
-                          导入设置
-                        </span>
-                      </Button>
-                      <input type="file" accept=".json" onChange={importSettings} className="hidden" />
-                    </label>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-gray-300 block">使用分析</span>
+                    <span className="text-sm text-gray-400">发送匿名使用统计数据</span>
                   </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>数据清理</CardTitle>
-                  <CardDescription>清除存储的数据以释放空间</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <Button
-                      variant="outline"
-                      onClick={() => clearData("搜索历史")}
-                      className="flex items-center justify-center"
-                    >
-                      <Trash2 className="w-4 h-4 mr-2" />
-                      清除搜索历史
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => clearData("收藏")}
-                      className="flex items-center justify-center"
-                    >
-                      <Trash2 className="w-4 h-4 mr-2" />
-                      清除收藏
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => clearData("缓存")}
-                      className="flex items-center justify-center"
-                    >
-                      <Trash2 className="w-4 h-4 mr-2" />
-                      清除缓存
-                    </Button>
-                  </div>
-
-                  <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-                    <Button variant="destructive" onClick={resetSettings} className="w-full">
-                      <RefreshCw className="w-4 h-4 mr-2" />
-                      重置所有设置
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
+                  <button
+                    onClick={() => updateSetting("analyticsEnabled", !settings.analyticsEnabled)}
+                    className={`relative w-12 h-6 rounded-full transition-colors ${
+                      settings.analyticsEnabled ? "bg-green-500" : "bg-gray-600"
+                    }`}
+                  >
+                    <div
+                      className={`absolute w-5 h-5 bg-white rounded-full top-0.5 transition-transform ${
+                        settings.analyticsEnabled ? "translate-x-6" : "translate-x-0.5"
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
             </div>
-          </TabsContent>
-        </Tabs>
-      </main>
+
+            <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-6">
+              <h3 className="text-lg font-medium text-white mb-4 flex items-center">
+                <Trash2 className="w-5 h-5 mr-2 text-red-400" />
+                数据管理
+              </h3>
+
+              <div className="space-y-3">
+                <button className="w-full p-3 bg-red-500/20 hover:bg-red-500/30 border border-red-400/30 rounded-lg text-red-400 text-sm transition-colors">
+                  清除所有历史记录
+                </button>
+                <button className="w-full p-3 bg-red-500/20 hover:bg-red-500/30 border border-red-400/30 rounded-lg text-red-400 text-sm transition-colors">
+                  清除语音数据
+                </button>
+                <button className="w-full p-3 bg-red-500/20 hover:bg-red-500/30 border border-red-400/30 rounded-lg text-red-400 text-sm transition-colors">
+                  重置所有数据
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 高级设置 */}
+        {activeSection === "advanced" && (
+          <div className="space-y-6">
+            <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-6">
+              <h3 className="text-lg font-medium text-white mb-4 flex items-center">
+                <Database className="w-5 h-5 mr-2 text-blue-400" />
+                系统设置
+              </h3>
+
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-gray-300 block">自动保存</span>
+                    <span className="text-sm text-gray-400">自动保存用户数据和设置</span>
+                  </div>
+                  <button
+                    onClick={() => updateSetting("autoSave", !settings.autoSave)}
+                    className={`relative w-12 h-6 rounded-full transition-colors ${
+                      settings.autoSave ? "bg-green-500" : "bg-gray-600"
+                    }`}
+                  >
+                    <div
+                      className={`absolute w-5 h-5 bg-white rounded-full top-0.5 transition-transform ${
+                        settings.autoSave ? "translate-x-6" : "translate-x-0.5"
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-gray-300 block">离线模式</span>
+                    <span className="text-sm text-gray-400">启用离线功能支持</span>
+                  </div>
+                  <button
+                    onClick={() => updateSetting("offlineMode", !settings.offlineMode)}
+                    className={`relative w-12 h-6 rounded-full transition-colors ${
+                      settings.offlineMode ? "bg-green-500" : "bg-gray-600"
+                    }`}
+                  >
+                    <div
+                      className={`absolute w-5 h-5 bg-white rounded-full top-0.5 transition-transform ${
+                        settings.offlineMode ? "translate-x-6" : "translate-x-0.5"
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-gray-300 block">调试模式</span>
+                    <span className="text-sm text-gray-400">显示详细的调试信息</span>
+                  </div>
+                  <button
+                    onClick={() => updateSetting("debugMode", !settings.debugMode)}
+                    className={`relative w-12 h-6 rounded-full transition-colors ${
+                      settings.debugMode ? "bg-green-500" : "bg-gray-600"
+                    }`}
+                  >
+                    <div
+                      className={`absolute w-5 h-5 bg-white rounded-full top-0.5 transition-transform ${
+                        settings.debugMode ? "translate-x-6" : "translate-x-0.5"
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-6">
+              <h3 className="text-lg font-medium text-white mb-4 flex items-center">
+                <Upload className="w-5 h-5 mr-2 text-green-400" />
+                设置备份
+              </h3>
+
+              <div className="space-y-3">
+                <button
+                  onClick={exportSettings}
+                  className="w-full flex items-center justify-center space-x-2 p-3 bg-green-500/20 hover:bg-green-500/30 border border-green-400/30 rounded-lg text-green-400 text-sm transition-colors"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>导出设置</span>
+                </button>
+
+                <label className="w-full flex items-center justify-center space-x-2 p-3 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-400/30 rounded-lg text-blue-400 text-sm transition-colors cursor-pointer">
+                  <Upload className="w-4 h-4" />
+                  <span>导入设置</span>
+                  <input type="file" accept=".json" onChange={importSettings} className="hidden" />
+                </label>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 状态指示器 */}
+      <div className="fixed bottom-8 right-8 flex flex-col space-y-2">
+        {isListening && (
+          <div className="bg-red-500/20 backdrop-blur-sm rounded-full p-3 border border-red-400/30">
+            <Mic className="w-5 h-5 text-red-400 animate-pulse" />
+          </div>
+        )}
+        {gestureMode !== "idle" && (
+          <div className="bg-blue-500/20 backdrop-blur-sm rounded-full p-3 border border-blue-400/30">
+            <Hand className="w-5 h-5 text-blue-400" />
+          </div>
+        )}
+      </div>
+
+      {/* 交互提示 */}
+      <div className="fixed bottom-8 left-8 bg-black/40 backdrop-blur-xl rounded-2xl border border-white/20 p-4">
+        <div className="text-white text-sm space-y-1">
+          <p>👆 右滑: 返回上页</p>
+          <p>📱 上下滑动: 切换设置分类</p>
+          <p>🗣️ 语音: "交互设置"、"保存设置"</p>
+          <p>⚙️ 实时保存: 更改即时生效</p>
+        </div>
+      </div>
     </div>
   )
 }

@@ -1,459 +1,536 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import {
   ArrowLeft,
+  BarChart3,
   TrendingUp,
+  Users,
   Clock,
+  Eye,
+  Hand,
+  Mic,
+  Brain,
+  Zap,
   Target,
   Award,
-  BookOpen,
-  Brain,
-  BarChart3,
-  PieChart,
   Activity,
-  Star,
-  Zap,
-  Trophy,
 } from "lucide-react"
-import { FavoritesManager } from "@/lib/favorites"
-import { RatingsManager } from "@/lib/ratings"
-import { HistoryManager } from "@/lib/history"
-import { LearningPathManager } from "@/lib/learning-path"
+import { voiceUtils } from "@/lib/utils"
 
 interface AnalyticsData {
-  totalSearches: number
-  totalLearningTime: number
-  completedPaths: number
-  favoriteCount: number
-  averageRating: number
-  weeklyActivity: number[]
-  topCategories: { name: string; count: number; color: string }[]
-  learningStreak: number
-  skillProgress: { skill: string; progress: number; level: string }[]
-  monthlyStats: { month: string; searches: number; completions: number }[]
+  usage: {
+    totalSessions: number
+    totalTime: number
+    averageSessionTime: number
+    dailyActive: number
+  }
+  interactions: {
+    voice: number
+    gesture: number
+    eyeTracking: number
+    text: number
+  }
+  features: {
+    search: number
+    generate: number
+    chat: number
+    learn: number
+  }
+  performance: {
+    responseTime: number
+    accuracy: number
+    satisfaction: number
+    efficiency: number
+  }
+  trends: {
+    date: string
+    sessions: number
+    interactions: number
+    satisfaction: number
+  }[]
 }
 
 export default function AnalyticsPage() {
   const router = useRouter()
   const [analyticsData, setAnalyticsData] = useState<AnalyticsData | null>(null)
-  const [timeRange, setTimeRange] = useState<"week" | "month" | "year">("month")
-  const [loading, setLoading] = useState(true)
+  const [selectedPeriod, setSelectedPeriod] = useState<"day" | "week" | "month">("week")
+  const [selectedMetric, setSelectedMetric] = useState<"usage" | "interactions" | "features" | "performance">("usage")
+  const [isListening, setIsListening] = useState(false)
+  const [gestureMode, setGestureMode] = useState<"idle" | "swipe">("idle")
 
-  const generateAnalyticsData = (): AnalyticsData => {
-    const history = HistoryManager.getHistory()
-    const favorites = FavoritesManager.getFavorites()
-    const ratings = RatingsManager.getRatings()
-    const paths = LearningPathManager.getLearningPaths()
+  const containerRef = useRef<HTMLDivElement>(null)
 
-    // 计算基础统计
-    const totalSearches = history.length
-    const favoriteCount = favorites.length
-    const completedPaths = paths.filter((p) => p.status === "completed").length
-    const ratingStats = RatingsManager.getStats()
-    const averageRating = ratingStats.total > 0 ? (ratingStats.likes / ratingStats.total) * 100 : 0
+  // 初始化分析数据
+  useEffect(() => {
+    const loadAnalyticsData = async () => {
+      // 模拟加载分析数据
+      await new Promise((resolve) => setTimeout(resolve, 1000))
 
-    // 计算学习时间（基于路径完成情况）
-    const totalLearningTime = paths.reduce((total, path) => {
-      const completedSteps = path.steps.filter((s) => s.completed)
-      return total + completedSteps.reduce((sum, step) => sum + step.estimatedTime, 0)
-    }, 0)
+      const mockData: AnalyticsData = {
+        usage: {
+          totalSessions: 156,
+          totalTime: 18420, // 秒
+          averageSessionTime: 118, // 秒
+          dailyActive: 12,
+        },
+        interactions: {
+          voice: 342,
+          gesture: 189,
+          eyeTracking: 67,
+          text: 234,
+        },
+        features: {
+          search: 89,
+          generate: 45,
+          chat: 67,
+          learn: 23,
+        },
+        performance: {
+          responseTime: 1.2, // 秒
+          accuracy: 94.5, // 百分比
+          satisfaction: 4.6, // 5分制
+          efficiency: 87.3, // 百分比
+        },
+        trends: [
+          { date: "2024-01-01", sessions: 12, interactions: 45, satisfaction: 4.2 },
+          { date: "2024-01-02", sessions: 15, interactions: 52, satisfaction: 4.4 },
+          { date: "2024-01-03", sessions: 18, interactions: 61, satisfaction: 4.5 },
+          { date: "2024-01-04", sessions: 14, interactions: 48, satisfaction: 4.3 },
+          { date: "2024-01-05", sessions: 20, interactions: 67, satisfaction: 4.7 },
+          { date: "2024-01-06", sessions: 16, interactions: 55, satisfaction: 4.4 },
+          { date: "2024-01-07", sessions: 22, interactions: 73, satisfaction: 4.8 },
+        ],
+      }
 
-    // 生成周活跃度数据
-    const weeklyActivity = Array.from({ length: 7 }, (_, i) => {
-      const dayStart = Date.now() - (6 - i) * 24 * 60 * 60 * 1000
-      const dayEnd = dayStart + 24 * 60 * 60 * 1000
-      return history.filter((h) => h.timestamp >= dayStart && h.timestamp < dayEnd).length
-    })
-
-    // 分析热门类别
-    const categoryMap = new Map<string, number>()
-    const colors = ["#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#06B6D4"]
-
-    history.forEach((item) => {
-      // 简单的关键词分类
-      const question = item.question.toLowerCase()
-      let category = "其他"
-
-      if (question.includes("学习") || question.includes("教育")) category = "学习方法"
-      else if (question.includes("编程") || question.includes("代码")) category = "编程技术"
-      else if (question.includes("设计") || question.includes("UI")) category = "设计创意"
-      else if (question.includes("管理") || question.includes("效率")) category = "效率管理"
-      else if (question.includes("健康") || question.includes("运动")) category = "健康生活"
-
-      categoryMap.set(category, (categoryMap.get(category) || 0) + 1)
-    })
-
-    const topCategories = Array.from(categoryMap.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 6)
-      .map(([name, count], index) => ({
-        name,
-        count,
-        color: colors[index] || "#6B7280",
-      }))
-
-    // 计算学习连续天数
-    const learningStreak = calculateLearningStreak(history)
-
-    // 技能进度分析
-    const skillProgress = [
-      { skill: "问题分析", progress: Math.min(100, (totalSearches / 50) * 100), level: "中级" },
-      { skill: "知识整理", progress: Math.min(100, (favoriteCount / 20) * 100), level: "初级" },
-      { skill: "学习规划", progress: Math.min(100, (completedPaths / 5) * 100), level: "高级" },
-      { skill: "持续学习", progress: Math.min(100, (learningStreak / 30) * 100), level: "专家" },
-    ]
-
-    // 月度统计
-    const monthlyStats = generateMonthlyStats(history, paths)
-
-    return {
-      totalSearches,
-      totalLearningTime: Math.round(totalLearningTime / 60), // 转换为小时
-      completedPaths,
-      favoriteCount,
-      averageRating: Math.round(averageRating),
-      weeklyActivity,
-      topCategories,
-      learningStreak,
-      skillProgress,
-      monthlyStats,
+      setAnalyticsData(mockData)
     }
-  }
 
-  const calculateLearningStreak = (history: any[]) => {
-    if (history.length === 0) return 0
+    loadAnalyticsData()
+  }, [selectedPeriod])
 
-    const today = new Date()
-    let streak = 0
-    const currentDate = new Date(today)
+  // 手势控制
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
 
-    while (true) {
-      const dayStart = new Date(currentDate)
-      dayStart.setHours(0, 0, 0, 0)
-      const dayEnd = new Date(currentDate)
-      dayEnd.setHours(23, 59, 59, 999)
+    let startX = 0,
+      startY = 0
+    let isPointerDown = false
 
-      const hasActivity = history.some((h) => h.timestamp >= dayStart.getTime() && h.timestamp <= dayEnd.getTime())
+    const handlePointerDown = (e: PointerEvent) => {
+      isPointerDown = true
+      startX = e.clientX
+      startY = e.clientY
+      setGestureMode("swipe")
+    }
 
-      if (hasActivity) {
-        streak++
-        currentDate.setDate(currentDate.getDate() - 1)
-      } else {
-        break
+    const handlePointerMove = (e: PointerEvent) => {
+      if (!isPointerDown) return
+
+      const deltaX = e.clientX - startX
+      const deltaY = e.clientY - startY
+
+      if (Math.abs(deltaX) > 100) {
+        if (deltaX > 0) {
+          // 右滑返回
+          router.back()
+          isPointerDown = false
+        }
+      }
+
+      if (Math.abs(deltaY) > 100) {
+        const metrics = ["usage", "interactions", "features", "performance"]
+        const currentIndex = metrics.indexOf(selectedMetric)
+
+        if (deltaY > 0 && currentIndex > 0) {
+          // 下滑 - 上一个指标
+          setSelectedMetric(metrics[currentIndex - 1] as any)
+        } else if (deltaY < 0 && currentIndex < metrics.length - 1) {
+          // 上滑 - 下一个指标
+          setSelectedMetric(metrics[currentIndex + 1] as any)
+        }
+        isPointerDown = false
       }
     }
 
-    return streak
-  }
-
-  const generateMonthlyStats = (history: any[], paths: any[]) => {
-    const months = ["1月", "2月", "3月", "4月", "5月", "6月"]
-    return months.map((month, index) => {
-      const monthStart = new Date(2024, index, 1).getTime()
-      const monthEnd = new Date(2024, index + 1, 0, 23, 59, 59).getTime()
-
-      const searches = history.filter((h) => h.timestamp >= monthStart && h.timestamp <= monthEnd).length
-
-      const completions = paths.filter((p) => {
-        return p.updatedAt >= monthStart && p.updatedAt <= monthEnd && p.status === "completed"
-      }).length
-
-      return { month, searches, completions }
-    })
-  }
-
-  const getSkillLevelColor = (level: string) => {
-    switch (level) {
-      case "初级":
-        return "text-green-600 bg-green-100"
-      case "中级":
-        return "text-blue-600 bg-blue-100"
-      case "高级":
-        return "text-purple-600 bg-purple-100"
-      case "专家":
-        return "text-orange-600 bg-orange-100"
-      default:
-        return "text-gray-600 bg-gray-100"
+    const handlePointerUp = () => {
+      isPointerDown = false
+      setTimeout(() => setGestureMode("idle"), 300)
     }
+
+    container.addEventListener("pointerdown", handlePointerDown)
+    container.addEventListener("pointermove", handlePointerMove)
+    container.addEventListener("pointerup", handlePointerUp)
+
+    return () => {
+      container.removeEventListener("pointerdown", handlePointerDown)
+      container.removeEventListener("pointermove", handlePointerMove)
+      container.removeEventListener("pointerup", handlePointerUp)
+    }
+  }, [selectedMetric, router])
+
+  // 语音控制
+  useEffect(() => {
+    const recognition = voiceUtils.initSpeechRecognition(
+      (transcript) => {
+        const command = transcript.toLowerCase()
+
+        if (command.includes("使用统计")) {
+          setSelectedMetric("usage")
+        } else if (command.includes("交互分析")) {
+          setSelectedMetric("interactions")
+        } else if (command.includes("功能使用")) {
+          setSelectedMetric("features")
+        } else if (command.includes("性能指标")) {
+          setSelectedMetric("performance")
+        } else if (command.includes("今天") || command.includes("日")) {
+          setSelectedPeriod("day")
+        } else if (command.includes("本周") || command.includes("周")) {
+          setSelectedPeriod("week")
+        } else if (command.includes("本月") || command.includes("月")) {
+          setSelectedPeriod("month")
+        } else if (command.includes("返回")) {
+          router.back()
+        }
+      },
+      () => setIsListening(true),
+      () => setIsListening(false),
+    )
+
+    recognition?.start()
+    return () => recognition?.stop()
+  }, [router])
+
+  // 格式化时间
+  const formatTime = (seconds: number): string => {
+    const hours = Math.floor(seconds / 3600)
+    const minutes = Math.floor((seconds % 3600) / 60)
+    if (hours > 0) return `${hours}小时${minutes}分钟`
+    return `${minutes}分钟`
   }
 
-  useEffect(() => {
-    setTimeout(() => {
-      const data = generateAnalyticsData()
-      setAnalyticsData(data)
-      setLoading(false)
-    }, 500)
-  }, [timeRange])
-
-  if (loading) {
+  if (!analyticsData) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">正在分析您的学习数据...</p>
+          <div className="relative mb-8">
+            <div className="w-24 h-24 border-4 border-blue-400/30 rounded-full animate-spin border-t-blue-400"></div>
+            <BarChart3 className="w-10 h-10 text-blue-400 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 animate-pulse" />
+          </div>
+          <h2 className="text-2xl font-bold text-white mb-4">正在加载分析数据</h2>
+          <p className="text-gray-400">分析使用模式和性能指标...</p>
         </div>
       </div>
     )
   }
 
-  if (!analyticsData) return null
-
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* 顶部导航 */}
-      <header className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button onClick={() => router.back()} className="p-2 hover:bg-gray-100 rounded-lg">
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-            <div>
-              <h1 className="text-xl font-semibold text-gray-900">学习分析报告</h1>
-              <p className="text-sm text-gray-600">深入了解您的学习进展和成果</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <select
-              value={timeRange}
-              onChange={(e) => setTimeRange(e.target.value as "week" | "month" | "year")}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+    <div ref={containerRef} className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+      {/* 顶部工具栏 */}
+      <div className="bg-black/20 backdrop-blur-xl border-b border-white/10 px-6 py-4">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center space-x-4">
+            <button
+              onClick={() => router.back()}
+              className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
             >
-              <option value="week">最近一周</option>
-              <option value="month">最近一月</option>
-              <option value="year">最近一年</option>
-            </select>
-          </div>
-        </div>
-      </header>
-
-      <div className="max-w-7xl mx-auto px-4 py-6">
-        {/* 核心指标卡片 */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white rounded-lg p-6 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">总搜索次数</p>
-                <p className="text-2xl font-bold text-gray-900">{analyticsData.totalSearches}</p>
-                <p className="text-xs text-green-600 flex items-center gap-1 mt-1">
-                  <TrendingUp className="w-3 h-3" />
-                  较上月 +12%
-                </p>
-              </div>
-              <div className="p-3 bg-blue-100 rounded-lg">
-                <BookOpen className="w-6 h-6 text-blue-600" />
-              </div>
+              <ArrowLeft className="w-5 h-5 text-white" />
+            </button>
+            <div className="flex items-center space-x-3">
+              <BarChart3 className="w-8 h-8 text-blue-400" />
+              <h1 className="text-xl font-bold text-white">使用分析</h1>
             </div>
           </div>
 
-          <div className="bg-white rounded-lg p-6 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">学习时长</p>
-                <p className="text-2xl font-bold text-gray-900">{analyticsData.totalLearningTime}h</p>
-                <p className="text-xs text-green-600 flex items-center gap-1 mt-1">
-                  <Clock className="w-3 h-3" />
-                  本月目标 80%
-                </p>
-              </div>
-              <div className="p-3 bg-green-100 rounded-lg">
-                <Clock className="w-6 h-6 text-green-600" />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg p-6 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">完成路径</p>
-                <p className="text-2xl font-bold text-gray-900">{analyticsData.completedPaths}</p>
-                <p className="text-xs text-blue-600 flex items-center gap-1 mt-1">
-                  <Target className="w-3 h-3" />
-                  完成率 75%
-                </p>
-              </div>
-              <div className="p-3 bg-purple-100 rounded-lg">
-                <Target className="w-6 h-6 text-purple-600" />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg p-6 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">学习连续天数</p>
-                <p className="text-2xl font-bold text-gray-900">{analyticsData.learningStreak}</p>
-                <p className="text-xs text-orange-600 flex items-center gap-1 mt-1">
-                  <Zap className="w-3 h-3" />
-                  保持良好习惯
-                </p>
-              </div>
-              <div className="p-3 bg-orange-100 rounded-lg">
-                <Award className="w-6 h-6 text-orange-600" />
-              </div>
-            </div>
+          <div className="flex items-center space-x-2">
+            {["day", "week", "month"].map((period) => (
+              <button
+                key={period}
+                onClick={() => setSelectedPeriod(period as any)}
+                className={`px-4 py-2 rounded-lg text-sm transition-colors ${
+                  selectedPeriod === period
+                    ? "bg-blue-500/20 text-blue-400 border border-blue-400/30"
+                    : "bg-white/10 text-gray-400 hover:text-white hover:bg-white/20"
+                }`}
+              >
+                {period === "day" ? "今日" : period === "week" ? "本周" : "本月"}
+              </button>
+            ))}
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-          {/* 周活跃度图表 */}
-          <div className="bg-white rounded-lg p-6 shadow-sm">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-              <Activity className="w-5 h-5" />
-              本周学习活跃度
-            </h3>
-            <div className="space-y-4">
-              {["周一", "周二", "周三", "周四", "周五", "周六", "周日"].map((day, index) => (
-                <div key={day} className="flex items-center gap-3">
-                  <span className="w-8 text-sm text-gray-600">{day}</span>
-                  <div className="flex-1 bg-gray-200 rounded-full h-2">
-                    <div
-                      className="bg-blue-600 h-2 rounded-full transition-all duration-500"
-                      style={{
-                        width: `${Math.min(100, (analyticsData.weeklyActivity[index] / Math.max(...analyticsData.weeklyActivity)) * 100)}%`,
-                      }}
-                    ></div>
-                  </div>
-                  <span className="w-8 text-sm text-gray-900 text-right">{analyticsData.weeklyActivity[index]}</span>
+        {/* 指标导航 */}
+        <div className="flex space-x-1 bg-white/5 rounded-lg p-1">
+          {[
+            { key: "usage", label: "使用统计", icon: Activity },
+            { key: "interactions", label: "交互分析", icon: Hand },
+            { key: "features", label: "功能使用", icon: Target },
+            { key: "performance", label: "性能指标", icon: Zap },
+          ].map(({ key, label, icon: Icon }) => (
+            <button
+              key={key}
+              onClick={() => setSelectedMetric(key as any)}
+              className={`flex-1 flex items-center justify-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
+                selectedMetric === key
+                  ? "bg-blue-500/20 text-blue-400 border border-blue-400/30"
+                  : "text-gray-400 hover:text-white hover:bg-white/10"
+              }`}
+            >
+              <Icon className="w-4 h-4" />
+              <span className="text-sm font-medium">{label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 分析内容 */}
+      <div className="px-6 py-6">
+        {/* 使用统计 */}
+        {selectedMetric === "usage" && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <Users className="w-8 h-8 text-blue-400" />
+                  <span className="text-2xl font-bold text-white">{analyticsData.usage.totalSessions}</span>
                 </div>
-              ))}
-            </div>
-          </div>
+                <h3 className="text-lg font-medium text-white mb-1">总会话数</h3>
+                <p className="text-sm text-gray-400">累计使用次数</p>
+              </div>
 
-          {/* 学习类别分布 */}
-          <div className="bg-white rounded-lg p-6 shadow-sm">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-              <PieChart className="w-5 h-5" />
-              学习类别分布
-            </h3>
-            <div className="space-y-3">
-              {analyticsData.topCategories.map((category, index) => (
-                <div key={category.name} className="flex items-center gap-3">
-                  <div className="w-4 h-4 rounded-full" style={{ backgroundColor: category.color }}></div>
-                  <span className="flex-1 text-sm text-gray-700">{category.name}</span>
-                  <span className="text-sm font-medium text-gray-900">{category.count}</span>
-                  <div className="w-20 bg-gray-200 rounded-full h-2">
-                    <div
-                      className="h-2 rounded-full transition-all duration-500"
-                      style={{
-                        width: `${(category.count / Math.max(...analyticsData.topCategories.map((c) => c.count))) * 100}%`,
-                        backgroundColor: category.color,
-                      }}
-                    ></div>
-                  </div>
+              <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <Clock className="w-8 h-8 text-green-400" />
+                  <span className="text-2xl font-bold text-white">{formatTime(analyticsData.usage.totalTime)}</span>
                 </div>
-              ))}
-            </div>
-          </div>
-        </div>
+                <h3 className="text-lg font-medium text-white mb-1">总使用时长</h3>
+                <p className="text-sm text-gray-400">累计活跃时间</p>
+              </div>
 
-        {/* 技能进度 */}
-        <div className="bg-white rounded-lg p-6 shadow-sm mb-8">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <Brain className="w-5 h-5" />
-            技能发展进度
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {analyticsData.skillProgress.map((skill, index) => (
-              <div key={skill.skill} className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="font-medium text-gray-900">{skill.skill}</span>
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${getSkillLevelColor(skill.level)}`}>
-                    {skill.level}
+              <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <TrendingUp className="w-8 h-8 text-purple-400" />
+                  <span className="text-2xl font-bold text-white">
+                    {formatTime(analyticsData.usage.averageSessionTime)}
                   </span>
                 </div>
-                <div className="flex items-center gap-3">
-                  <div className="flex-1 bg-gray-200 rounded-full h-2">
+                <h3 className="text-lg font-medium text-white mb-1">平均会话时长</h3>
+                <p className="text-sm text-gray-400">单次使用平均时间</p>
+              </div>
+
+              <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <Activity className="w-8 h-8 text-orange-400" />
+                  <span className="text-2xl font-bold text-white">{analyticsData.usage.dailyActive}</span>
+                </div>
+                <h3 className="text-lg font-medium text-white mb-1">日活跃度</h3>
+                <p className="text-sm text-gray-400">今日使用次数</p>
+              </div>
+            </div>
+
+            {/* 趋势图 */}
+            <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-6">
+              <h3 className="text-lg font-medium text-white mb-4">使用趋势</h3>
+              <div className="h-64 flex items-end justify-between space-x-2">
+                {analyticsData.trends.map((trend, index) => (
+                  <div key={index} className="flex-1 flex flex-col items-center">
                     <div
-                      className="bg-gradient-to-r from-blue-500 to-purple-600 h-2 rounded-full transition-all duration-1000"
-                      style={{ width: `${skill.progress}%` }}
-                    ></div>
+                      className="w-full bg-gradient-to-t from-blue-500 to-purple-500 rounded-t-lg transition-all duration-500 hover:from-blue-400 hover:to-purple-400"
+                      style={{ height: `${(trend.sessions / 25) * 100}%` }}
+                    />
+                    <span className="text-xs text-gray-400 mt-2">{new Date(trend.date).getDate()}日</span>
                   </div>
-                  <span className="text-sm font-medium text-gray-900">{Math.round(skill.progress)}%</span>
-                </div>
+                ))}
               </div>
-            ))}
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* 月度趋势 */}
-        <div className="bg-white rounded-lg p-6 shadow-sm">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <BarChart3 className="w-5 h-5" />
-            月度学习趋势
-          </h3>
-          <div className="space-y-4">
-            {analyticsData.monthlyStats.map((stat, index) => (
-              <div key={stat.month} className="flex items-center gap-4">
-                <span className="w-8 text-sm text-gray-600">{stat.month}</span>
-                <div className="flex-1 space-y-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-500 w-12">搜索</span>
-                    <div className="flex-1 bg-blue-100 rounded-full h-2">
-                      <div
-                        className="bg-blue-600 h-2 rounded-full transition-all duration-500"
-                        style={{
-                          width: `${Math.min(100, (stat.searches / Math.max(...analyticsData.monthlyStats.map((s) => s.searches))) * 100)}%`,
-                        }}
-                      ></div>
-                    </div>
-                    <span className="text-xs text-gray-900 w-8">{stat.searches}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-500 w-12">完成</span>
-                    <div className="flex-1 bg-green-100 rounded-full h-2">
-                      <div
-                        className="bg-green-600 h-2 rounded-full transition-all duration-500"
-                        style={{
-                          width: `${Math.min(100, (stat.completions / Math.max(...analyticsData.monthlyStats.map((s) => s.completions))) * 100)}%`,
-                        }}
-                      ></div>
-                    </div>
-                    <span className="text-xs text-gray-900 w-8">{stat.completions}</span>
-                  </div>
+        {/* 交互分析 */}
+        {selectedMetric === "interactions" && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <Mic className="w-8 h-8 text-red-400" />
+                  <span className="text-2xl font-bold text-white">{analyticsData.interactions.voice}</span>
                 </div>
+                <h3 className="text-lg font-medium text-white mb-1">语音交互</h3>
+                <p className="text-sm text-gray-400">语音命令次数</p>
               </div>
-            ))}
-          </div>
-        </div>
 
-        {/* 成就徽章 */}
-        <div className="bg-white rounded-lg p-6 shadow-sm">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <Trophy className="w-5 h-5" />
-            学习成就
-          </h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="text-center p-4 bg-yellow-50 rounded-lg">
-              <div className="w-12 h-12 bg-yellow-500 rounded-full flex items-center justify-center mx-auto mb-2">
-                <Star className="w-6 h-6 text-white" />
+              <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <Hand className="w-8 h-8 text-blue-400" />
+                  <span className="text-2xl font-bold text-white">{analyticsData.interactions.gesture}</span>
+                </div>
+                <h3 className="text-lg font-medium text-white mb-1">手势操作</h3>
+                <p className="text-sm text-gray-400">手势识别次数</p>
               </div>
-              <p className="text-sm font-medium text-gray-900">学习新手</p>
-              <p className="text-xs text-gray-600">完成首次搜索</p>
+
+              <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <Eye className="w-8 h-8 text-green-400" />
+                  <span className="text-2xl font-bold text-white">{analyticsData.interactions.eyeTracking}</span>
+                </div>
+                <h3 className="text-lg font-medium text-white mb-1">眼动追踪</h3>
+                <p className="text-sm text-gray-400">注视操作次数</p>
+              </div>
+
+              <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <Brain className="w-8 h-8 text-purple-400" />
+                  <span className="text-2xl font-bold text-white">{analyticsData.interactions.text}</span>
+                </div>
+                <h3 className="text-lg font-medium text-white mb-1">文字输入</h3>
+                <p className="text-sm text-gray-400">键盘输入次数</p>
+              </div>
             </div>
-            <div className="text-center p-4 bg-blue-50 rounded-lg">
-              <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center mx-auto mb-2">
-                <BookOpen className="w-6 h-6 text-white" />
+
+            {/* 交互方式分布 */}
+            <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-6">
+              <h3 className="text-lg font-medium text-white mb-4">交互方式分布</h3>
+              <div className="space-y-4">
+                {Object.entries(analyticsData.interactions).map(([key, value]) => {
+                  const total = Object.values(analyticsData.interactions).reduce((a, b) => a + b, 0)
+                  const percentage = (value / total) * 100
+                  const colors = {
+                    voice: "bg-red-500",
+                    gesture: "bg-blue-500",
+                    eyeTracking: "bg-green-500",
+                    text: "bg-purple-500",
+                  }
+                  const labels = {
+                    voice: "语音交互",
+                    gesture: "手势操作",
+                    eyeTracking: "眼动追踪",
+                    text: "文字输入",
+                  }
+
+                  return (
+                    <div key={key} className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-300">{labels[key as keyof typeof labels]}</span>
+                        <span className="text-white">
+                          {value} ({percentage.toFixed(1)}%)
+                        </span>
+                      </div>
+                      <div className="w-full bg-gray-700 rounded-full h-2">
+                        <div
+                          className={`h-2 rounded-full transition-all duration-500 ${colors[key as keyof typeof colors]}`}
+                          style={{ width: `${percentage}%` }}
+                        />
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
-              <p className="text-sm font-medium text-gray-900">知识收集者</p>
-              <p className="text-xs text-gray-600">收藏10个回答</p>
-            </div>
-            <div className="text-center p-4 bg-green-50 rounded-lg">
-              <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-2">
-                <Target className="w-6 h-6 text-white" />
-              </div>
-              <p className="text-sm font-medium text-gray-900">目标达成者</p>
-              <p className="text-xs text-gray-600">完成学习路径</p>
-            </div>
-            <div className="text-center p-4 bg-purple-50 rounded-lg">
-              <div className="w-12 h-12 bg-purple-500 rounded-full flex items-center justify-center mx-auto mb-2">
-                <Zap className="w-6 h-6 text-white" />
-              </div>
-              <p className="text-sm font-medium text-gray-900">坚持不懈</p>
-              <p className="text-xs text-gray-600">连续学习7天</p>
             </div>
           </div>
+        )}
+
+        {/* 功能使用 */}
+        {selectedMetric === "features" && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {Object.entries(analyticsData.features).map(([key, value]) => {
+                const icons = {
+                  search: { icon: BarChart3, color: "text-blue-400" },
+                  generate: { icon: Award, color: "text-green-400" },
+                  chat: { icon: Mic, color: "text-purple-400" },
+                  learn: { icon: Target, color: "text-orange-400" },
+                }
+                const labels = {
+                  search: "智能搜索",
+                  generate: "内容生成",
+                  chat: "AI对话",
+                  learn: "学习路径",
+                }
+                const IconComponent = icons[key as keyof typeof icons].icon
+                const iconColor = icons[key as keyof typeof icons].color
+
+                return (
+                  <div key={key} className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <IconComponent className={`w-8 h-8 ${iconColor}`} />
+                      <span className="text-2xl font-bold text-white">{value}</span>
+                    </div>
+                    <h3 className="text-lg font-medium text-white mb-1">{labels[key as keyof typeof labels]}</h3>
+                    <p className="text-sm text-gray-400">使用次数</p>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* 性能指标 */}
+        {selectedMetric === "performance" && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <Zap className="w-8 h-8 text-yellow-400" />
+                  <span className="text-2xl font-bold text-white">{analyticsData.performance.responseTime}s</span>
+                </div>
+                <h3 className="text-lg font-medium text-white mb-1">响应时间</h3>
+                <p className="text-sm text-gray-400">平均响应延迟</p>
+              </div>
+
+              <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <Target className="w-8 h-8 text-green-400" />
+                  <span className="text-2xl font-bold text-white">{analyticsData.performance.accuracy}%</span>
+                </div>
+                <h3 className="text-lg font-medium text-white mb-1">识别准确率</h3>
+                <p className="text-sm text-gray-400">AI识别精度</p>
+              </div>
+
+              <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <Award className="w-8 h-8 text-purple-400" />
+                  <span className="text-2xl font-bold text-white">{analyticsData.performance.satisfaction}/5</span>
+                </div>
+                <h3 className="text-lg font-medium text-white mb-1">用户满意度</h3>
+                <p className="text-sm text-gray-400">平均评分</p>
+              </div>
+
+              <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <TrendingUp className="w-8 h-8 text-blue-400" />
+                  <span className="text-2xl font-bold text-white">{analyticsData.performance.efficiency}%</span>
+                </div>
+                <h3 className="text-lg font-medium text-white mb-1">操作效率</h3>
+                <p className="text-sm text-gray-400">任务完成效率</p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 状态指示器 */}
+      <div className="fixed bottom-8 right-8 flex flex-col space-y-2">
+        {isListening && (
+          <div className="bg-red-500/20 backdrop-blur-sm rounded-full p-3 border border-red-400/30">
+            <Mic className="w-5 h-5 text-red-400 animate-pulse" />
+          </div>
+        )}
+        {gestureMode !== "idle" && (
+          <div className="bg-blue-500/20 backdrop-blur-sm rounded-full p-3 border border-blue-400/30">
+            <Hand className="w-5 h-5 text-blue-400" />
+          </div>
+        )}
+      </div>
+
+      {/* 交互提示 */}
+      <div className="fixed bottom-8 left-8 bg-black/40 backdrop-blur-xl rounded-2xl border border-white/20 p-4">
+        <div className="text-white text-sm space-y-1">
+          <p>👆 右滑: 返回上页</p>
+          <p>📱 上下滑动: 切换指标类型</p>
+          <p>🗣️ 语音: "使用统计"、"交互分析"</p>
+          <p>📊 实时更新: 数据自动刷新</p>
         </div>
       </div>
     </div>

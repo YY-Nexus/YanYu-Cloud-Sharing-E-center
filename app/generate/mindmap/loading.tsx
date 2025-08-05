@@ -1,21 +1,24 @@
-export default function MindMapLoading() {
+export default function GenerateMindMapLoading() {
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
       <div className="text-center">
-        <div className="relative">
-          <div className="w-20 h-20 border-4 border-gray-200 rounded-full"></div>
-          <div className="w-20 h-20 border-4 border-blue-600 border-t-transparent rounded-full animate-spin absolute top-0 left-0"></div>
-        </div>
-        <p className="text-gray-600 text-lg mt-4 mb-2">正在生成思维导图...</p>
-        <p className="text-gray-500 text-sm">分析内容结构中，请稍候</p>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
+        <h2 className="text-xl font-semibold text-gray-900 mb-2">正在生成思维导图</h2>
+        <p className="text-gray-600">AI正在分析内容结构...</p>
 
-        <div className="mt-8 space-y-2">
-          <div className="flex items-center justify-center space-x-2">
-            <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce"></div>
-            <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: "0.1s" }}></div>
-            <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: "0.2s" }}></div>
+        <div className="mt-6 space-y-2">
+          <div className="flex items-center justify-center space-x-2 text-sm text-gray-600">
+            <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse"></div>
+            <span>分析关键概念</span>
           </div>
-          <p className="text-xs text-gray-400">正在构建知识结构...</p>
+          <div className="flex items-center justify-center space-x-2 text-sm text-gray-600">
+            <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" style={{ animationDelay: "0.2s" }}></div>
+            <span>构建知识结构</span>
+          </div>
+          <div className="flex items-center justify-center space-x-2 text-sm text-gray-600">
+            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" style={{ animationDelay: "0.4s" }}></div>
+            <span>生成可视化图表</span>
+          </div>
         </div>
       </div>
     </div>

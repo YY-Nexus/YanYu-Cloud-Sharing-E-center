@@ -4,750 +4,474 @@ import type React from "react"
 
 import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
-import {
-  ArrowLeft,
-  Send,
-  Sparkles,
-  Brain,
-  FileText,
-  Lightbulb,
-  Zap,
-  Settings,
-  Download,
-  Share2,
-  Copy,
-  ThumbsUp,
-  ThumbsDown,
-  RefreshCw,
-  Mic,
-  MicOff,
-  Volume2,
-  VolumeX,
-} from "lucide-react"
-import {
-  AIEnhancedEngine,
-  type SmartQARequest,
-  type SmartQAResponse,
-  type ContentGenerationRequest,
-  type GeneratedContent,
-} from "@/lib/ai-enhanced"
+import { ArrowLeft, Send, Mic, MicOff, Bot, User, Brain, Eye, Hand } from "lucide-react"
+import { gestureUtils, voiceUtils, aiUtils } from "@/lib/utils"
+
+interface Message {
+  id: string
+  type: "user" | "assistant"
+  content: string
+  timestamp: Date
+  context?: {
+    intent: string
+    confidence: number
+    suggestions: string[]
+  }
+}
+
+interface ConversationState {
+  isListening: boolean
+  isThinking: boolean
+  gestureMode: "idle" | "swipe" | "tap" | "hold"
+  eyeTracking: boolean
+  currentTopic: string
+}
 
 export default function AIAssistantPage() {
   const router = useRouter()
-  const [activeTab, setActiveTab] = useState<"chat" | "content" | "insights">("chat")
-  const [chatInput, setChatInput] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
-  const [chatHistory, setChatHistory] = useState<SmartQAResponse[]>([])
-  const [currentResponse, setCurrentResponse] = useState<SmartQAResponse | null>(null)
+  const [messages, setMessages] = useState<Message[]>([
+    {
+      id: "welcome",
+      type: "assistant",
+      content:
+        "你好！我是YYC³ AI助手。你可以通过语音、手势或文字与我交流。我会记住我们的对话上下文，为你提供更智能的帮助。",
+      timestamp: new Date(),
+      context: {
+        intent: "greeting",
+        confidence: 1.0,
+        suggestions: ["开始对话", "语音交流", "手势控制"],
+      },
+    },
+  ])
 
-  // 内容生成相关状态
-  const [contentType, setContentType] = useState<ContentGenerationRequest["type"]>("article")
-  const [contentTopic, setContentTopic] = useState("")
-  const [contentDifficulty, setContentDifficulty] = useState<"beginner" | "intermediate" | "advanced">("intermediate")
-  const [contentLength, setContentLength] = useState<"short" | "medium" | "long">("medium")
-  const [contentStyle, setContentStyle] = useState<"formal" | "casual" | "academic" | "conversational">(
-    "conversational",
-  )
-  const [generatedContent, setGeneratedContent] = useState<GeneratedContent | null>(null)
+  const [inputText, setInputText] = useState("")
+  const [conversationState, setConversationState] = useState<ConversationState>({
+    isListening: false,
+    isThinking: false,
+    gestureMode: "idle",
+    eyeTracking: false,
+    currentTopic: "",
+  })
 
-  // 设置相关状态
-  const [responseStyle, setResponseStyle] = useState<SmartQARequest["responseStyle"]>("detailed")
-  const [includeReferences, setIncludeReferences] = useState(true)
-  const [domain, setDomain] = useState("")
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
-  // 语音相关状态
-  const [isRecording, setIsRecording] = useState(false)
-  const [isSpeaking, setIsSpeaking] = useState(false)
-
-  const chatContainerRef = useRef<HTMLDivElement>(null)
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
-
+  // 自动滚动到最新消息
   useEffect(() => {
-    // 加载历史记录
-    const history = AIEnhancedEngine.getQAHistory()
-    setChatHistory(history.slice(0, 10))
-  }, [])
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }, [messages])
 
+  // 手势控制
   useEffect(() => {
-    // 自动滚动到底部
-    if (chatContainerRef.current) {
-      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight
+    const container = containerRef.current
+    if (!container) return
+
+    let startX = 0,
+      startY = 0,
+      startTime = 0
+    let isPointerDown = false
+
+    const handlePointerDown = (e: PointerEvent) => {
+      isPointerDown = true
+      startX = e.clientX
+      startY = e.clientY
+      startTime = Date.now()
+      setConversationState((prev) => ({ ...prev, gestureMode: "tap" }))
     }
-  }, [chatHistory, currentResponse])
 
-  const handleChatSubmit = async (e: React.FormEvent) => {
+    const handlePointerMove = (e: PointerEvent) => {
+      if (!isPointerDown) return
+
+      const deltaX = e.clientX - startX
+      const deltaY = e.clientY - startY
+      const distance = gestureUtils.calculateDistance(startX, startY, e.clientX, e.clientY)
+
+      if (distance > 50) {
+        const gestureType = gestureUtils.getGestureType(deltaX, deltaY)
+        setConversationState((prev) => ({ ...prev, gestureMode: "swipe" }))
+
+        if (gestureType === "swipe-right" && Math.abs(deltaX) > 150) {
+          // 右滑返回
+          router.back()
+          isPointerDown = false
+        } else if (gestureType === "swipe-up" && Math.abs(deltaY) > 150) {
+          // 上滑清空对话
+          clearConversation()
+          isPointerDown = false
+        } else if (gestureType === "swipe-down" && Math.abs(deltaY) > 150) {
+          // 下滑开始语音
+          startVoiceInput()
+          isPointerDown = false
+        }
+      }
+    }
+
+    const handlePointerUp = (e: PointerEvent) => {
+      const holdTime = Date.now() - startTime
+
+      if (holdTime > 1000 && !conversationState.isListening) {
+        // 长按开始语音输入
+        setConversationState((prev) => ({ ...prev, gestureMode: "hold" }))
+        startVoiceInput()
+      }
+
+      isPointerDown = false
+      setTimeout(() => {
+        setConversationState((prev) => ({ ...prev, gestureMode: "idle" }))
+      }, 300)
+    }
+
+    container.addEventListener("pointerdown", handlePointerDown)
+    container.addEventListener("pointermove", handlePointerMove)
+    container.addEventListener("pointerup", handlePointerUp)
+
+    return () => {
+      container.removeEventListener("pointerdown", handlePointerDown)
+      container.removeEventListener("pointermove", handlePointerMove)
+      container.removeEventListener("pointerup", handlePointerUp)
+    }
+  }, [conversationState.isListening, router])
+
+  // 语音输入
+  const startVoiceInput = () => {
+    if (conversationState.isListening) return
+
+    const recognition = voiceUtils.initSpeechRecognition(
+      (transcript) => {
+        if (transcript.trim()) {
+          sendMessage(transcript)
+        }
+      },
+      () => setConversationState((prev) => ({ ...prev, isListening: true })),
+      () => setConversationState((prev) => ({ ...prev, isListening: false })),
+    )
+
+    recognition?.start()
+  }
+
+  // 发送消息
+  const sendMessage = async (content: string) => {
+    if (!content.trim()) return
+
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      type: "user",
+      content: content.trim(),
+      timestamp: new Date(),
+    }
+
+    setMessages((prev) => [...prev, userMessage])
+    setInputText("")
+    setConversationState((prev) => ({ ...prev, isThinking: true }))
+
+    // 分析用户意图
+    const analysis = aiUtils.analyzeIntent(content)
+
+    // 模拟AI思考和回复
+    await new Promise((resolve) => setTimeout(resolve, 1500))
+
+    const assistantMessage: Message = {
+      id: (Date.now() + 1).toString(),
+      type: "assistant",
+      content: generateAIResponse(content, analysis),
+      timestamp: new Date(),
+      context: analysis,
+    }
+
+    setMessages((prev) => [...prev, assistantMessage])
+    setConversationState((prev) => ({
+      ...prev,
+      isThinking: false,
+      currentTopic: analysis.intent,
+    }))
+
+    // 语音回复
+    voiceUtils.speak(assistantMessage.content)
+    gestureUtils.hapticFeedback([100, 50, 100])
+  }
+
+  // 生成AI回复
+  const generateAIResponse = (userInput: string, analysis: any): string => {
+    const responses = {
+      search: [
+        `我理解你想要搜索"${userInput}"。让我为你提供相关信息和深度分析。`,
+        `关于"${userInput}"，我可以帮你从多个角度进行探索和分析。`,
+        `我会为你搜索"${userInput}"的相关内容，并提供智能化的结果整理。`,
+      ],
+      generate: [
+        `我可以帮你生成关于"${userInput}"的创意内容。你希望生成思维导图、PPT还是海报？`,
+        `基于"${userInput}"，我能为你创建多种形式的内容，包括可视化图表和演示文稿。`,
+        `让我为"${userInput}"生成一些创意方案，你可以选择最适合的形式。`,
+      ],
+      learn: [
+        `我来为你制定"${userInput}"的学习路径。我会根据你的水平和目标定制个性化的学习计划。`,
+        `关于"${userInput}"的学习，我可以提供系统性的教程和实践指导。`,
+        `让我帮你构建"${userInput}"的知识体系，从基础到进阶的完整学习方案。`,
+      ],
+      analyze: [
+        `我将对"${userInput}"进行深度分析，包括趋势预测和数据洞察。`,
+        `让我从多个维度分析"${userInput}"，为你提供全面的解读和建议。`,
+        `我会运用AI能力对"${userInput}"进行智能分析，发现其中的关键信息。`,
+      ],
+    }
+
+    const intentResponses = responses[analysis.intent as keyof typeof responses] || responses.search
+    const randomResponse = intentResponses[Math.floor(Math.random() * intentResponses.length)]
+
+    return randomResponse
+  }
+
+  // 清空对话
+  const clearConversation = () => {
+    setMessages([
+      {
+        id: "welcome",
+        type: "assistant",
+        content: "对话已清空。我们可以开始新的交流！",
+        timestamp: new Date(),
+        context: {
+          intent: "reset",
+          confidence: 1.0,
+          suggestions: ["新话题", "继续对话", "功能介绍"],
+        },
+      },
+    ])
+    gestureUtils.hapticFeedback([100, 100, 100])
+  }
+
+  // 处理表单提交
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!chatInput.trim() || isLoading) return
-
-    setIsLoading(true)
-    setCurrentResponse(null)
-
-    try {
-      const request: SmartQARequest = {
-        question: chatInput,
-        domain: domain || undefined,
-        responseStyle,
-        includeReferences,
-      }
-
-      const response = await AIEnhancedEngine.smartQA(request)
-      setCurrentResponse(response)
-      setChatHistory((prev) => [response, ...prev].slice(0, 10))
-      setChatInput("")
-    } catch (error) {
-      console.error("智能问答失败:", error)
-      alert("问答服务暂时不可用，请稍后重试")
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const handleContentGeneration = async () => {
-    if (!contentTopic.trim() || isLoading) return
-
-    setIsLoading(true)
-    setGeneratedContent(null)
-
-    try {
-      const request: ContentGenerationRequest = {
-        type: contentType,
-        topic: contentTopic,
-        difficulty: contentDifficulty,
-        length: contentLength,
-        style: contentStyle,
-        language: "zh-CN",
-      }
-
-      const content = await AIEnhancedEngine.generateContent(request)
-      setGeneratedContent(content)
-    } catch (error) {
-      console.error("内容生成失败:", error)
-      alert("内容生成服务暂时不可用，请稍后重试")
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const handleVoiceInput = async () => {
-    if (isRecording) {
-      stopRecording()
-    } else {
-      startRecording()
-    }
-  }
-
-  const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const mediaRecorder = new MediaRecorder(stream)
-      mediaRecorderRef.current = mediaRecorder
-
-      const audioChunks: BlobPart[] = []
-      mediaRecorder.ondataavailable = (event) => {
-        audioChunks.push(event.data)
-      }
-
-      mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunks, { type: "audio/wav" })
-        handleVoiceRecognition(audioBlob)
-        stream.getTracks().forEach((track) => track.stop())
-      }
-
-      mediaRecorder.start()
-      setIsRecording(true)
-    } catch (error) {
-      console.error("无法访问麦克风:", error)
-      alert("无法访问麦克风，请检查权限设置")
-    }
-  }
-
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop()
-      setIsRecording(false)
-    }
-  }
-
-  const handleVoiceRecognition = async (audioBlob: Blob) => {
-    // 模拟语音识别结果
-    const mockTranscription = "这是语音识别的结果示例"
-    setChatInput(mockTranscription)
-  }
-
-  const handleTextToSpeech = (text: string) => {
-    if (isSpeaking) {
-      speechSynthesis.cancel()
-      setIsSpeaking(false)
-    } else {
-      const utterance = new SpeechSynthesisUtterance(text)
-      utterance.lang = "zh-CN"
-      utterance.onend = () => setIsSpeaking(false)
-      speechSynthesis.speak(utterance)
-      setIsSpeaking(true)
-    }
-  }
-
-  const handleCopy = async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text)
-      alert("内容已复制到剪贴板")
-    } catch (error) {
-      console.error("复制失败:", error)
-    }
-  }
-
-  const handleShare = async (content: string, title: string) => {
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: title,
-          text: content,
-        })
-      } catch (error) {
-        console.error("分享失败:", error)
-      }
-    } else {
-      handleCopy(content)
-    }
-  }
-
-  const handleDownload = (content: string, filename: string) => {
-    const blob = new Blob([content], { type: "text/plain;charset=utf-8" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = filename
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
+    sendMessage(inputText)
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* 顶部导航 */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
+    <div
+      ref={containerRef}
+      className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex flex-col"
+    >
+      {/* 顶部工具栏 */}
+      <div className="bg-black/20 backdrop-blur-xl border-b border-white/10 px-6 py-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
             <button
-              onClick={() => router.push("/")}
-              className="flex items-center gap-2 text-gray-600 hover:text-gray-800 transition-colors"
+              onClick={() => router.back()}
+              className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
             >
-              <ArrowLeft className="w-5 h-5" />
-              <span>返回首页</span>
+              <ArrowLeft className="w-5 h-5 text-white" />
             </button>
-
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-6 h-6 text-blue-600" />
-              <h1 className="text-xl font-semibold text-gray-800">AI智能助手</h1>
+            <div className="flex items-center space-x-3">
+              <div className="relative">
+                <Bot className="w-8 h-8 text-purple-400" />
+                {conversationState.isThinking && (
+                  <div className="absolute -top-1 -right-1 w-3 h-3 bg-orange-400 rounded-full animate-pulse" />
+                )}
+              </div>
+              <div>
+                <h1 className="text-xl font-bold text-white">AI助手</h1>
+                <p className="text-sm text-gray-400">
+                  {conversationState.isThinking
+                    ? "正在思考..."
+                    : conversationState.isListening
+                      ? "正在聆听..."
+                      : conversationState.currentTopic
+                        ? `当前话题: ${conversationState.currentTopic}`
+                        : "准备就绪"}
+                </p>
+              </div>
             </div>
+          </div>
 
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setActiveTab("chat")}
-                className={`px-3 py-1 rounded-lg text-sm transition-colors ${
-                  activeTab === "chat" ? "bg-blue-100 text-blue-700" : "text-gray-600 hover:text-gray-800"
-                }`}
-              >
-                智能问答
-              </button>
-              <button
-                onClick={() => setActiveTab("content")}
-                className={`px-3 py-1 rounded-lg text-sm transition-colors ${
-                  activeTab === "content" ? "bg-blue-100 text-blue-700" : "text-gray-600 hover:text-gray-800"
-                }`}
-              >
-                内容生成
-              </button>
-              <button
-                onClick={() => setActiveTab("insights")}
-                className={`px-3 py-1 rounded-lg text-sm transition-colors ${
-                  activeTab === "insights" ? "bg-blue-100 text-blue-700" : "text-gray-600 hover:text-gray-800"
-                }`}
-              >
-                学习洞察
-              </button>
-            </div>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={clearConversation}
+              className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-white text-sm transition-colors"
+            >
+              清空对话
+            </button>
           </div>
         </div>
-      </header>
+      </div>
 
-      <div className="max-w-6xl mx-auto px-4 py-8">
-        {/* 智能问答标签页 */}
-        {activeTab === "chat" && (
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-            {/* 主聊天区域 */}
-            <div className="lg:col-span-3">
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 h-[600px] flex flex-col">
-                {/* 聊天历史 */}
-                <div ref={chatContainerRef} className="flex-1 p-6 overflow-y-auto space-y-4">
-                  {chatHistory.length === 0 && !currentResponse && (
-                    <div className="text-center py-12">
-                      <Brain className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                      <h3 className="text-lg font-medium text-gray-600 mb-2">开始智能对话</h3>
-                      <p className="text-gray-500">向AI助手提问任何问题，获得专业的回答和建议</p>
-                    </div>
-                  )}
-
-                  {/* 显示当前回答 */}
-                  {currentResponse && (
-                    <div className="space-y-4">
-                      {/* 用户问题 */}
-                      <div className="flex justify-end">
-                        <div className="bg-blue-600 text-white rounded-lg px-4 py-2 max-w-xs lg:max-w-md">
-                          {currentResponse.question}
-                        </div>
-                      </div>
-
-                      {/* AI回答 */}
-                      <div className="flex justify-start">
-                        <div className="bg-gray-100 rounded-lg px-4 py-3 max-w-full">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Sparkles className="w-4 h-4 text-blue-600" />
-                            <span className="text-sm font-medium text-gray-700">AI助手</span>
-                            <span className="text-xs text-gray-500">
-                              置信度: {Math.round(currentResponse.confidence * 100)}%
-                            </span>
-                          </div>
-
-                          <div className="prose prose-sm max-w-none">
-                            <div
-                              className="text-gray-800 leading-relaxed whitespace-pre-wrap"
-                              dangerouslySetInnerHTML={{
-                                __html: currentResponse.answer
-                                  .replace(/\n/g, "<br>")
-                                  .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
-                                  .replace(/\*(.*?)\*/g, "<em>$1</em>")
-                                  .replace(
-                                    /`(.*?)`/g,
-                                    "<code class='bg-gray-200 px-1 py-0.5 rounded text-sm'>$1</code>",
-                                  ),
-                              }}
-                            />
-                          </div>
-
-                          {/* 操作按钮 */}
-                          <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-200">
-                            <button
-                              onClick={() => handleTextToSpeech(currentResponse.answer)}
-                              className="p-1 text-gray-500 hover:text-blue-600 transition-colors"
-                              title={isSpeaking ? "停止朗读" : "朗读回答"}
-                            >
-                              {isSpeaking ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-                            </button>
-                            <button
-                              onClick={() => handleCopy(currentResponse.answer)}
-                              className="p-1 text-gray-500 hover:text-blue-600 transition-colors"
-                              title="复制回答"
-                            >
-                              <Copy className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleShare(currentResponse.answer, currentResponse.question)}
-                              className="p-1 text-gray-500 hover:text-blue-600 transition-colors"
-                              title="分享回答"
-                            >
-                              <Share2 className="w-4 h-4" />
-                            </button>
-                            <div className="flex-1"></div>
-                            <button className="p-1 text-gray-400 hover:text-green-600 transition-colors">
-                              <ThumbsUp className="w-4 h-4" />
-                            </button>
-                            <button className="p-1 text-gray-400 hover:text-red-600 transition-colors">
-                              <ThumbsDown className="w-4 h-4" />
-                            </button>
-                          </div>
-
-                          {/* 相关问题 */}
-                          {currentResponse.relatedQuestions.length > 0 && (
-                            <div className="mt-4 pt-3 border-t border-gray-200">
-                              <h4 className="text-sm font-medium text-gray-700 mb-2">相关问题：</h4>
-                              <div className="space-y-1">
-                                {currentResponse.relatedQuestions.map((question, index) => (
-                                  <button
-                                    key={index}
-                                    onClick={() => setChatInput(question)}
-                                    className="block text-sm text-blue-600 hover:text-blue-800 transition-colors"
-                                  >
-                                    • {question}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* 后续建议 */}
-                          {currentResponse.followUpSuggestions.length > 0 && (
-                            <div className="mt-3 pt-3 border-t border-gray-200">
-                              <h4 className="text-sm font-medium text-gray-700 mb-2">后续建议：</h4>
-                              <div className="space-y-1">
-                                {currentResponse.followUpSuggestions.map((suggestion, index) => (
-                                  <div key={index} className="text-sm text-gray-600">
-                                    • {suggestion}
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 历史对话 */}
-                  {chatHistory.slice(1).map((qa) => (
-                    <div key={qa.id} className="space-y-4 opacity-70">
-                      <div className="flex justify-end">
-                        <div className="bg-blue-600 text-white rounded-lg px-4 py-2 max-w-xs lg:max-w-md">
-                          {qa.question}
-                        </div>
-                      </div>
-                      <div className="flex justify-start">
-                        <div className="bg-gray-100 rounded-lg px-4 py-3 max-w-full">
-                          <div className="text-gray-800 text-sm line-clamp-3">{qa.answer}</div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* 输入区域 */}
-                <div className="border-t border-gray-200 p-4">
-                  <form onSubmit={handleChatSubmit} className="flex gap-3">
-                    <div className="flex-1 relative">
-                      <input
-                        type="text"
-                        value={chatInput}
-                        onChange={(e) => setChatInput(e.target.value)}
-                        placeholder="输入您的问题..."
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-                        disabled={isLoading}
-                      />
-                      <button
-                        type="button"
-                        onClick={handleVoiceInput}
-                        className={`absolute right-2 top-1/2 transform -translate-y-1/2 p-1 rounded transition-colors ${
-                          isRecording ? "text-red-600 animate-pulse" : "text-gray-400 hover:text-blue-600"
-                        }`}
-                      >
-                        {isRecording ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-                      </button>
-                    </div>
-                    <button
-                      type="submit"
-                      disabled={!chatInput.trim() || isLoading}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
-                    >
-                      {isLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                      发送
-                    </button>
-                  </form>
-                </div>
-              </div>
+      {/* 消息列表 */}
+      <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
+        {messages.map((message) => (
+          <div
+            key={message.id}
+            className={`flex items-start space-x-4 ${
+              message.type === "user" ? "flex-row-reverse space-x-reverse" : ""
+            }`}
+          >
+            {/* 头像 */}
+            <div
+              className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${
+                message.type === "user"
+                  ? "bg-blue-500/20 border border-blue-400/30"
+                  : "bg-purple-500/20 border border-purple-400/30"
+              }`}
+            >
+              {message.type === "user" ? (
+                <User className="w-5 h-5 text-blue-400" />
+              ) : (
+                <Bot className="w-5 h-5 text-purple-400" />
+              )}
             </div>
 
-            {/* 设置侧边栏 */}
-            <div className="lg:col-span-1">
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                  <Settings className="w-5 h-5" />
-                  对话设置
-                </h3>
+            {/* 消息内容 */}
+            <div className={`flex-1 max-w-3xl ${message.type === "user" ? "text-right" : ""}`}>
+              <div
+                className={`inline-block p-4 rounded-2xl ${
+                  message.type === "user"
+                    ? "bg-blue-500/20 backdrop-blur-sm border border-blue-400/30 text-white"
+                    : "bg-white/10 backdrop-blur-sm border border-white/20 text-white"
+                }`}
+              >
+                <p className="leading-relaxed">{message.content}</p>
 
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">回答风格</label>
-                    <select
-                      value={responseStyle}
-                      onChange={(e) => setResponseStyle(e.target.value as SmartQARequest["responseStyle"])}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-                    >
-                      <option value="detailed">详细回答</option>
-                      <option value="concise">简洁回答</option>
-                      <option value="step-by-step">分步说明</option>
-                      <option value="examples">举例说明</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">专业领域</label>
-                    <input
-                      type="text"
-                      value={domain}
-                      onChange={(e) => setDomain(e.target.value)}
-                      placeholder="如：技术、教育、商业等"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      id="includeReferences"
-                      checked={includeReferences}
-                      onChange={(e) => setIncludeReferences(e.target.checked)}
-                      className="mr-2"
-                    />
-                    <label htmlFor="includeReferences" className="text-sm text-gray-700">
-                      包含参考来源
-                    </label>
-                  </div>
-                </div>
-
-                {/* 快捷问题 */}
-                <div className="mt-6">
-                  <h4 className="font-medium text-gray-800 mb-3">快捷问题</h4>
-                  <div className="space-y-2">
-                    {["如何提高学习效率？", "什么是人工智能？", "如何制定学习计划？", "编程入门建议"].map(
-                      (question) => (
-                        <button
-                          key={question}
-                          onClick={() => setChatInput(question)}
-                          className="w-full text-left px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
-                        >
-                          {question}
-                        </button>
-                      ),
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* 内容生成标签页 */}
-        {activeTab === "content" && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* 生成设置 */}
-            <div className="lg:col-span-1">
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                  <FileText className="w-5 h-5" />
-                  内容生成
-                </h3>
-
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">内容类型</label>
-                    <select
-                      value={contentType}
-                      onChange={(e) => setContentType(e.target.value as ContentGenerationRequest["type"])}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-                    >
-                      <option value="article">文章</option>
-                      <option value="summary">摘要</option>
-                      <option value="quiz">测验</option>
-                      <option value="flashcards">学习卡片</option>
-                      <option value="outline">大纲</option>
-                      <option value="explanation">概念解释</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">主题</label>
-                    <input
-                      type="text"
-                      value={contentTopic}
-                      onChange={(e) => setContentTopic(e.target.value)}
-                      placeholder="输入内容主题..."
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">难度级别</label>
-                    <select
-                      value={contentDifficulty}
-                      onChange={(e) => setContentDifficulty(e.target.value as "beginner" | "intermediate" | "advanced")}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-                    >
-                      <option value="beginner">初级</option>
-                      <option value="intermediate">中级</option>
-                      <option value="advanced">高级</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">内容长度</label>
-                    <select
-                      value={contentLength}
-                      onChange={(e) => setContentLength(e.target.value as "short" | "medium" | "long")}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-                    >
-                      <option value="short">简短</option>
-                      <option value="medium">中等</option>
-                      <option value="long">详细</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">写作风格</label>
-                    <select
-                      value={contentStyle}
-                      onChange={(e) =>
-                        setContentStyle(e.target.value as "formal" | "casual" | "academic" | "conversational")
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-                    >
-                      <option value="conversational">对话式</option>
-                      <option value="formal">正式</option>
-                      <option value="casual">轻松</option>
-                      <option value="academic">学术</option>
-                    </select>
-                  </div>
-
-                  <button
-                    onClick={handleContentGeneration}
-                    disabled={!contentTopic.trim() || isLoading}
-                    className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
-                  >
-                    {isLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-                    生成内容
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* 生成结果 */}
-            <div className="lg:col-span-2">
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-                {generatedContent ? (
-                  <div>
-                    {/* 内容头部 */}
-                    <div className="p-6 border-b border-gray-200">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h2 className="text-xl font-semibold text-gray-800">{generatedContent.title}</h2>
-                          <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
-                            <span>类型: {generatedContent.type}</span>
-                            <span>字数: {generatedContent.metadata.wordCount}</span>
-                            <span>阅读时间: {generatedContent.metadata.readingTime}分钟</span>
-                            <span>难度: {generatedContent.metadata.difficulty}</span>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => handleCopy(generatedContent.content)}
-                            className="p-2 text-gray-500 hover:text-blue-600 transition-colors"
-                            title="复制内容"
-                          >
-                            <Copy className="w-5 h-5" />
-                          </button>
-                          <button
-                            onClick={() => handleShare(generatedContent.content, generatedContent.title)}
-                            className="p-2 text-gray-500 hover:text-blue-600 transition-colors"
-                            title="分享内容"
-                          >
-                            <Share2 className="w-5 h-5" />
-                          </button>
-                          <button
-                            onClick={() => handleDownload(generatedContent.content, `${generatedContent.title}.txt`)}
-                            className="p-2 text-gray-500 hover:text-blue-600 transition-colors"
-                            title="下载内容"
-                          >
-                            <Download className="w-5 h-5" />
-                          </button>
-                        </div>
-                      </div>
+                {/* 上下文信息 */}
+                {message.context && message.type === "assistant" && (
+                  <div className="mt-3 pt-3 border-t border-white/20">
+                    <div className="flex items-center space-x-2 text-xs text-gray-300 mb-2">
+                      <Brain className="w-3 h-3" />
+                      <span>意图: {message.context.intent}</span>
+                      <span>置信度: {Math.round(message.context.confidence * 100)}%</span>
                     </div>
 
-                    {/* 内容正文 */}
-                    <div className="p-6">
-                      <div className="prose prose-lg max-w-none">
-                        <div
-                          className="text-gray-800 leading-relaxed whitespace-pre-wrap"
-                          dangerouslySetInnerHTML={{
-                            __html: generatedContent.content
-                              .replace(/\n/g, "<br>")
-                              .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
-                              .replace(/\*(.*?)\*/g, "<em>$1</em>")
-                              .replace(/`(.*?)`/g, "<code class='bg-gray-100 px-1 py-0.5 rounded text-sm'>$1</code>")
-                              .replace(
-                                /^### (.*$)/gm,
-                                "<h3 class='text-lg font-semibold mt-6 mb-3 text-gray-800'>$1</h3>",
-                              )
-                              .replace(
-                                /^## (.*$)/gm,
-                                "<h2 class='text-xl font-semibold mt-8 mb-4 text-gray-800'>$1</h2>",
-                              )
-                              .replace(/^# (.*$)/gm, "<h1 class='text-2xl font-bold mt-8 mb-4 text-gray-800'>$1</h1>"),
-                          }}
-                        />
-                      </div>
-                    </div>
-
-                    {/* 标签 */}
-                    {generatedContent.metadata.topics.length > 0 && (
-                      <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
-                        <h4 className="text-sm font-medium text-gray-700 mb-2">相关主题：</h4>
-                        <div className="flex flex-wrap gap-2">
-                          {generatedContent.metadata.topics.map((topic, index) => (
-                            <span key={index} className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
-                              {topic}
-                            </span>
-                          ))}
-                        </div>
+                    {message.context.suggestions.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {message.context.suggestions.map((suggestion, index) => (
+                          <button
+                            key={index}
+                            onClick={() => sendMessage(suggestion)}
+                            className="px-3 py-1 bg-white/10 hover:bg-white/20 rounded-full text-xs text-white transition-colors"
+                          >
+                            {suggestion}
+                          </button>
+                        ))}
                       </div>
                     )}
-                  </div>
-                ) : (
-                  <div className="p-12 text-center">
-                    <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-gray-600 mb-2">开始内容生成</h3>
-                    <p className="text-gray-500">选择内容类型和主题，让AI为您生成专业内容</p>
                   </div>
                 )}
               </div>
+
+              <div className="mt-2 text-xs text-gray-400">{message.timestamp.toLocaleTimeString()}</div>
             </div>
           </div>
-        )}
+        ))}
 
-        {/* 学习洞察标签页 */}
-        {activeTab === "insights" && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2">
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                  <Lightbulb className="w-5 h-5" />
-                  学习洞察
-                </h3>
-                <div className="text-center py-12">
-                  <Brain className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-600 mb-2">洞察功能开发中</h3>
-                  <p className="text-gray-500">基于您的学习历史生成个性化洞察和建议</p>
-                </div>
-              </div>
+        {/* AI思考指示器 */}
+        {conversationState.isThinking && (
+          <div className="flex items-start space-x-4">
+            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-purple-500/20 border border-purple-400/30 flex items-center justify-center">
+              <Bot className="w-5 h-5 text-purple-400 animate-pulse" />
             </div>
-
-            <div className="lg:col-span-1">
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <h4 className="font-semibold text-gray-800 mb-4">学习统计</h4>
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600">总问答次数</span>
-                    <span className="font-semibold">{chatHistory.length}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600">生成内容数</span>
-                    <span className="font-semibold">{generatedContent ? 1 : 0}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600">平均置信度</span>
-                    <span className="font-semibold">
-                      {chatHistory.length > 0
-                        ? Math.round(
-                            (chatHistory.reduce((sum, qa) => sum + qa.confidence, 0) / chatHistory.length) * 100,
-                          )
-                        : 0}
-                      %
-                    </span>
-                  </div>
+            <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-4">
+              <div className="flex items-center space-x-2">
+                <div className="flex space-x-1">
+                  <div
+                    className="w-2 h-2 bg-purple-400 rounded-full animate-bounce"
+                    style={{ animationDelay: "0ms" }}
+                  />
+                  <div
+                    className="w-2 h-2 bg-purple-400 rounded-full animate-bounce"
+                    style={{ animationDelay: "150ms" }}
+                  />
+                  <div
+                    className="w-2 h-2 bg-purple-400 rounded-full animate-bounce"
+                    style={{ animationDelay: "300ms" }}
+                  />
                 </div>
+                <span className="text-gray-300 text-sm">AI正在思考...</span>
               </div>
             </div>
           </div>
         )}
+
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* 输入区域 */}
+      <div className="bg-black/20 backdrop-blur-xl border-t border-white/10 px-6 py-4">
+        <form onSubmit={handleSubmit} className="flex items-center space-x-4">
+          <div className="flex-1 relative">
+            <input
+              ref={inputRef}
+              type="text"
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              placeholder="输入消息或使用语音、手势交流..."
+              className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-2xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent"
+              disabled={conversationState.isListening || conversationState.isThinking}
+            />
+
+            {conversationState.isListening && (
+              <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
+                <div className="flex space-x-1">
+                  <div className="w-1 h-4 bg-red-400 rounded-full animate-voice-wave" />
+                  <div
+                    className="w-1 h-4 bg-red-400 rounded-full animate-voice-wave"
+                    style={{ animationDelay: "0.1s" }}
+                  />
+                  <div
+                    className="w-1 h-4 bg-red-400 rounded-full animate-voice-wave"
+                    style={{ animationDelay: "0.2s" }}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={startVoiceInput}
+            disabled={conversationState.isListening || conversationState.isThinking}
+            className={`p-3 rounded-full transition-colors ${
+              conversationState.isListening
+                ? "bg-red-500/20 border border-red-400/30 text-red-400"
+                : "bg-white/10 hover:bg-white/20 border border-white/20 text-white"
+            }`}
+          >
+            {conversationState.isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+          </button>
+
+          <button
+            type="submit"
+            disabled={!inputText.trim() || conversationState.isThinking}
+            className="p-3 bg-purple-500 hover:bg-purple-600 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-full transition-colors"
+          >
+            <Send className="w-5 h-5 text-white" />
+          </button>
+        </form>
+      </div>
+
+      {/* 状态指示器 */}
+      <div className="fixed bottom-24 right-8 flex flex-col space-y-2">
+        {conversationState.isListening && (
+          <div className="bg-red-500/20 backdrop-blur-sm rounded-full p-3 border border-red-400/30">
+            <Mic className="w-5 h-5 text-red-400 animate-pulse" />
+          </div>
+        )}
+        {conversationState.gestureMode !== "idle" && (
+          <div className="bg-blue-500/20 backdrop-blur-sm rounded-full p-3 border border-blue-400/30">
+            <Hand className="w-5 h-5 text-blue-400" />
+          </div>
+        )}
+        {conversationState.eyeTracking && (
+          <div className="bg-green-500/20 backdrop-blur-sm rounded-full p-3 border border-green-400/30">
+            <Eye className="w-5 h-5 text-green-400" />
+          </div>
+        )}
+      </div>
+
+      {/* 交互提示 */}
+      <div className="fixed bottom-24 left-8 bg-black/40 backdrop-blur-xl rounded-2xl border border-white/20 p-4">
+        <div className="text-white text-sm space-y-1">
+          <p>🗣️ 语音: 点击麦克风或长按屏幕</p>
+          <p>👆 手势: 右滑返回，上滑清空，下滑语音</p>
+          <p>💬 文字: 直接输入或点击建议</p>
+          <p>🧠 智能: AI会记住对话上下文</p>
+        </div>
       </div>
     </div>
   )

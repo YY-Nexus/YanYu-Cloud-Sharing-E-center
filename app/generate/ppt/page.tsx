@@ -1,194 +1,419 @@
 "use client"
 
-import React from "react"
-
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { Presentation, FileText, Layers, Zap } from "lucide-react"
+import { ArrowLeft, Presentation, Download, Share2, Eye, Hand, Mic, Plus, Trash2 } from "lucide-react"
+import { gestureUtils, voiceUtils } from "@/lib/utils"
 
-export default function GeneratePPTPage() {
+interface PPTSlide {
+  id: string
+  title: string
+  content: string
+  layout: "title" | "content" | "image" | "chart"
+  background: string
+  animation: string
+}
+
+export default function PPTGeneratorPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const question = searchParams.get("q") || ""
+  const query = searchParams.get("q") || ""
 
-  const [currentStep, setCurrentStep] = useState(0)
-  const [progress, setProgress] = useState(0)
-  const [slideElements, setSlideElements] = useState<string[]>([])
+  const [slides, setSlides] = useState<PPTSlide[]>([])
+  const [currentSlide, setCurrentSlide] = useState(0)
+  const [isGenerating, setIsGenerating] = useState(true)
+  const [isListening, setIsListening] = useState(false)
+  const [gestureMode, setGestureMode] = useState<"idle" | "swipe" | "pinch">("idle")
+  const [isPreviewMode, setIsPreviewMode] = useState(false)
 
-  const generationSteps = [
-    {
-      title: "正在构建演示大纲...",
-      description: "分析内容结构和逻辑关系",
-      icon: FileText,
-      duration: 2000,
-    },
-    {
-      title: "正在设计幻灯片布局...",
-      description: "创建专业的PPT模板",
-      icon: Layers,
-      duration: 2500,
-    },
-    {
-      title: "正在优化视觉呈现...",
-      description: "应用配色方案和图表",
-      icon: Presentation,
-      duration: 2000,
-    },
-    {
-      title: "正在添加动画效果...",
-      description: "完善切换和动画效果",
-      icon: Zap,
-      duration: 1500,
-    },
-  ]
+  const containerRef = useRef<HTMLDivElement>(null)
+  const slideRef = useRef<HTMLDivElement>(null)
 
-  const mockSlideElements = [
-    "slide-1: title: '智能学习之路：如何坚持走下去'",
-    "slide-2: content: '你是否也曾感到迷茫？'",
-    "slide-3: bullets: ['学习目标不明确', '面对质疑和反对']",
-    "slide-4: theme: background-gradient(135deg, #4f46e5, #7c3aed)",
-    "slide-5: animation: fade-in, slide-up, duration: 0.8s",
-    "slide-6: layout: title-content, image-placeholder: right",
-    "slide-7: footer: page-number, company-logo, date",
-  ]
-
+  // 生成PPT内容
   useEffect(() => {
-    const processGeneration = async () => {
-      // 模拟PPT元素生成动画
-      const slideInterval = setInterval(() => {
-        setSlideElements((prev) => {
-          if (prev.length < mockSlideElements.length) {
-            return [...prev, mockSlideElements[prev.length]]
-          }
-          return prev
-        })
-      }, 350)
+    const generatePPT = async () => {
+      setIsGenerating(true)
 
-      // 执行生成步骤
-      for (let i = 0; i < generationSteps.length; i++) {
-        setCurrentStep(i)
-        setProgress(((i + 1) / generationSteps.length) * 100)
-        await new Promise((resolve) => setTimeout(resolve, generationSteps[i].duration))
+      // 模拟AI生成PPT
+      await new Promise((resolve) => setTimeout(resolve, 3000))
+
+      const generatedSlides: PPTSlide[] = [
+        {
+          id: "1",
+          title: query || "主题演示",
+          content: `关于${query}的深度解析与应用`,
+          layout: "title",
+          background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+          animation: "fadeIn",
+        },
+        {
+          id: "2",
+          title: "核心概念",
+          content: `${query}的基本定义和核心要素：\n\n• 理论基础\n• 关键特征\n• 应用范围\n• 发展历程`,
+          layout: "content",
+          background: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
+          animation: "slideInLeft",
+        },
+        {
+          id: "3",
+          title: "实践应用",
+          content: `${query}在实际场景中的应用：\n\n• 成功案例分析\n• 实施策略\n• 效果评估\n• 最佳实践`,
+          layout: "content",
+          background: "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)",
+          animation: "slideInRight",
+        },
+        {
+          id: "4",
+          title: "数据分析",
+          content: "相关数据图表和趋势分析",
+          layout: "chart",
+          background: "linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)",
+          animation: "slideInUp",
+        },
+        {
+          id: "5",
+          title: "未来展望",
+          content: `${query}的发展趋势和未来机遇：\n\n• 技术发展方向\n• 市场前景\n• 挑战与机遇\n• 行动建议`,
+          layout: "content",
+          background: "linear-gradient(135deg, #fa709a 0%, #fee140 100%)",
+          animation: "slideInDown",
+        },
+      ]
+
+      setSlides(generatedSlides)
+      setIsGenerating(false)
+    }
+
+    if (query) {
+      generatePPT()
+    }
+  }, [query])
+
+  // 手势控制
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+
+    let startX = 0,
+      startY = 0
+    let startDistance = 0
+    let isPointerDown = false
+    let pointers: PointerEvent[] = []
+
+    const handlePointerDown = (e: PointerEvent) => {
+      pointers.push(e)
+
+      if (pointers.length === 1) {
+        isPointerDown = true
+        startX = e.clientX
+        startY = e.clientY
+        setGestureMode("swipe")
+      } else if (pointers.length === 2) {
+        const dx = pointers[0].clientX - pointers[1].clientX
+        const dy = pointers[0].clientY - pointers[1].clientY
+        startDistance = Math.sqrt(dx * dx + dy * dy)
+        setGestureMode("pinch")
+      }
+    }
+
+    const handlePointerMove = (e: PointerEvent) => {
+      const index = pointers.findIndex((p) => p.pointerId === e.pointerId)
+      if (index !== -1) {
+        pointers[index] = e
       }
 
-      clearInterval(slideInterval)
+      if (pointers.length === 1 && isPointerDown) {
+        const deltaX = e.clientX - startX
+        const deltaY = e.clientY - startY
 
-      // 生成完成后跳转到结果页面
-      setTimeout(() => {
-        router.push(`/ppt-result?q=${encodeURIComponent(question)}`)
-      }, 1000)
+        if (Math.abs(deltaX) > 100) {
+          if (deltaX > 0 && currentSlide > 0) {
+            // 右滑 - 上一张
+            setCurrentSlide((prev) => prev - 1)
+            gestureUtils.hapticFeedback(100)
+          } else if (deltaX < 0 && currentSlide < slides.length - 1) {
+            // 左滑 - 下一张
+            setCurrentSlide((prev) => prev + 1)
+            gestureUtils.hapticFeedback(100)
+          }
+          isPointerDown = false
+        }
+
+        if (Math.abs(deltaY) > 100) {
+          if (deltaY > 0) {
+            // 下滑 - 退出预览
+            setIsPreviewMode(false)
+          } else {
+            // 上滑 - 进入预览
+            setIsPreviewMode(true)
+          }
+          isPointerDown = false
+        }
+      } else if (pointers.length === 2) {
+        // 双指缩放控制预览模式
+        const dx = pointers[0].clientX - pointers[1].clientX
+        const dy = pointers[0].clientY - pointers[1].clientY
+        const distance = Math.sqrt(dx * dx + dy * dy)
+
+        if (distance > startDistance * 1.2) {
+          setIsPreviewMode(true)
+        } else if (distance < startDistance * 0.8) {
+          setIsPreviewMode(false)
+        }
+      }
     }
 
-    if (question) {
-      processGeneration()
+    const handlePointerUp = (e: PointerEvent) => {
+      pointers = pointers.filter((p) => p.pointerId !== e.pointerId)
+
+      if (pointers.length === 0) {
+        isPointerDown = false
+        setTimeout(() => setGestureMode("idle"), 300)
+      }
     }
-  }, [question, router])
+
+    container.addEventListener("pointerdown", handlePointerDown)
+    container.addEventListener("pointermove", handlePointerMove)
+    container.addEventListener("pointerup", handlePointerUp)
+
+    return () => {
+      container.removeEventListener("pointerdown", handlePointerDown)
+      container.removeEventListener("pointermove", handlePointerMove)
+      container.removeEventListener("pointerup", handlePointerUp)
+    }
+  }, [currentSlide, slides.length])
+
+  // 语音控制
+  useEffect(() => {
+    const recognition = voiceUtils.initSpeechRecognition(
+      (transcript) => {
+        const command = transcript.toLowerCase()
+
+        if (command.includes("下一张") || command.includes("下一页")) {
+          if (currentSlide < slides.length - 1) {
+            setCurrentSlide((prev) => prev + 1)
+          }
+        } else if (command.includes("上一张") || command.includes("上一页")) {
+          if (currentSlide > 0) {
+            setCurrentSlide((prev) => prev - 1)
+          }
+        } else if (command.includes("预览模式")) {
+          setIsPreviewMode(true)
+        } else if (command.includes("编辑模式")) {
+          setIsPreviewMode(false)
+        } else if (command.includes("返回")) {
+          router.back()
+        }
+      },
+      () => setIsListening(true),
+      () => setIsListening(false),
+    )
+
+    recognition?.start()
+    return () => recognition?.stop()
+  }, [currentSlide, slides.length, router])
+
+  // 添加新幻灯片
+  const addSlide = () => {
+    const newSlide: PPTSlide = {
+      id: Date.now().toString(),
+      title: "新幻灯片",
+      content: "点击编辑内容...",
+      layout: "content",
+      background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+      animation: "fadeIn",
+    }
+
+    setSlides((prev) => [...prev, newSlide])
+    setCurrentSlide(slides.length)
+    gestureUtils.hapticFeedback([100, 50, 100])
+  }
+
+  // 删除幻灯片
+  const deleteSlide = (slideId: string) => {
+    if (slides.length <= 1) return
+
+    setSlides((prev) => prev.filter((slide) => slide.id !== slideId))
+    if (currentSlide >= slides.length - 1) {
+      setCurrentSlide(Math.max(0, currentSlide - 1))
+    }
+    gestureUtils.hapticFeedback([100, 100])
+  }
+
+  if (isGenerating) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="relative mb-8">
+            <div className="w-24 h-24 border-4 border-orange-400/30 rounded-full animate-spin border-t-orange-400"></div>
+            <Presentation className="w-10 h-10 text-orange-400 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 animate-pulse" />
+          </div>
+          <h2 className="text-2xl font-bold text-white mb-4">AI正在生成演示文稿</h2>
+          <p className="text-gray-400 mb-2">分析内容结构...</p>
+          <p className="text-gray-400">设计幻灯片布局...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-      {/* 退出提示 */}
-      <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50">
-        <div className="bg-gray-800 text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
-          <span>若要退出全屏，请将鼠标移动到屏幕顶部或长按</span>
-          <kbd className="bg-gray-700 px-2 py-1 rounded text-xs">esc</kbd>
+    <div
+      ref={containerRef}
+      className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 relative overflow-hidden"
+    >
+      {/* 顶部工具栏 */}
+      <div className="absolute top-0 left-0 right-0 z-20 bg-black/20 backdrop-blur-sm border-b border-white/10">
+        <div className="flex items-center justify-between px-6 py-4">
+          <div className="flex items-center space-x-4">
+            <button
+              onClick={() => router.back()}
+              className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+            >
+              <ArrowLeft className="w-5 h-5 text-white" />
+            </button>
+            <h1 className="text-xl font-bold text-white">{query} - 演示文稿</h1>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => setIsPreviewMode(!isPreviewMode)}
+              className={`p-2 rounded-full transition-colors ${
+                isPreviewMode ? "bg-blue-500/20 text-blue-400" : "bg-white/10 text-white hover:bg-white/20"
+              }`}
+            >
+              <Eye className="w-5 h-5" />
+            </button>
+            <button className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors">
+              <Download className="w-5 h-5 text-white" />
+            </button>
+            <button className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors">
+              <Share2 className="w-5 h-5 text-white" />
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="flex items-center justify-center min-h-screen px-8">
-        <div className="w-full max-w-4xl">
-          {/* 标题 */}
-          <div className="text-center mb-12">
-            <h1 className="text-3xl font-bold text-gray-800 mb-4">PPT制作中</h1>
-            <p className="text-gray-600">正在为您创建专业的演示文稿</p>
-          </div>
-
-          {/* PPT预览窗口 */}
-          <div className="bg-gray-900 rounded-lg p-6 mb-8 shadow-2xl">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-              <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
-              <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-              <span className="text-gray-400 text-sm ml-4">presentation.pptx</span>
+      {/* 主内容区域 */}
+      <div className="pt-20 pb-8 px-6 h-screen flex">
+        {/* 幻灯片缩略图 */}
+        {!isPreviewMode && (
+          <div className="w-64 mr-6 bg-black/20 backdrop-blur-sm rounded-2xl border border-white/10 p-4 overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-white font-medium">幻灯片</h3>
+              <button onClick={addSlide} className="p-1 rounded-full bg-white/10 hover:bg-white/20 transition-colors">
+                <Plus className="w-4 h-4 text-white" />
+              </button>
             </div>
-            <div className="font-mono text-sm">
-              {slideElements.map((element, index) => (
+
+            <div className="space-y-3">
+              {slides.map((slide, index) => (
                 <div
-                  key={index}
-                  className="text-orange-300 leading-relaxed animate-fadeIn"
-                  style={{ animationDelay: `${index * 0.1}s` }}
+                  key={slide.id}
+                  onClick={() => setCurrentSlide(index)}
+                  className={`relative group cursor-pointer rounded-lg overflow-hidden transition-all duration-300 ${
+                    index === currentSlide ? "ring-2 ring-purple-400 scale-105" : "hover:scale-102"
+                  }`}
                 >
-                  {element}
+                  <div className="aspect-video p-3 text-white text-xs" style={{ background: slide.background }}>
+                    <div className="font-medium mb-1 truncate">{slide.title}</div>
+                    <div className="text-white/80 line-clamp-3">{slide.content}</div>
+                  </div>
+
+                  <div className="absolute top-2 left-2 bg-black/50 rounded px-2 py-1 text-xs text-white">
+                    {index + 1}
+                  </div>
+
+                  {slides.length > 1 && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        deleteSlide(slide.id)
+                      }}
+                      className="absolute top-2 right-2 p-1 bg-red-500/20 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <Trash2 className="w-3 h-3 text-red-400" />
+                    </button>
+                  )}
                 </div>
               ))}
-              {slideElements.length > 0 && (
-                <div className="inline-block w-2 h-5 bg-orange-400 animate-pulse ml-1"></div>
-              )}
             </div>
           </div>
+        )}
 
-          {/* 进度信息 */}
-          <div className="bg-white rounded-lg p-6 shadow-lg">
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-lg font-medium text-gray-800">
-                {generationSteps[currentStep]?.title || "制作完成"}
-              </span>
-              <span className="text-indigo-600 font-bold text-xl">{Math.round(progress)}%</span>
-            </div>
+        {/* 主幻灯片显示区域 */}
+        <div className="flex-1 flex items-center justify-center">
+          {slides.length > 0 && (
+            <div
+              ref={slideRef}
+              className={`relative rounded-2xl shadow-2xl overflow-hidden transition-all duration-500 ${
+                isPreviewMode ? "w-full h-full" : "w-4/5 aspect-video"
+              }`}
+              style={{ background: slides[currentSlide]?.background }}
+            >
+              <div className="absolute inset-0 p-12 flex flex-col justify-center text-white">
+                <h1 className={`font-bold mb-8 ${isPreviewMode ? "text-6xl" : "text-4xl"}`}>
+                  {slides[currentSlide]?.title}
+                </h1>
 
-            {/* 进度条 */}
-            <div className="w-full bg-gray-200 rounded-full h-3 mb-6">
-              <div
-                className="bg-gradient-to-r from-indigo-500 to-blue-500 h-3 rounded-full transition-all duration-500 ease-out"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-
-            {/* 当前步骤详情 */}
-            {generationSteps[currentStep] && (
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center">
-                  {React.createElement(generationSteps[currentStep].icon, {
-                    className: "w-6 h-6 text-indigo-600 animate-pulse",
-                  })}
-                </div>
-                <div>
-                  <p className="text-gray-600">{generationSteps[currentStep].description}</p>
-                  <div className="flex items-center gap-2 mt-2">
-                    <div className="flex space-x-1">
-                      <div className="w-2 h-2 bg-indigo-600 rounded-full animate-bounce"></div>
-                      <div
-                        className="w-2 h-2 bg-indigo-600 rounded-full animate-bounce"
-                        style={{ animationDelay: "0.1s" }}
-                      ></div>
-                      <div
-                        className="w-2 h-2 bg-indigo-600 rounded-full animate-bounce"
-                        style={{ animationDelay: "0.2s" }}
-                      ></div>
+                <div className={`leading-relaxed ${isPreviewMode ? "text-2xl" : "text-xl"}`}>
+                  {slides[currentSlide]?.content.split("\n").map((line, index) => (
+                    <div key={index} className="mb-2">
+                      {line}
                     </div>
-                    <span className="text-sm text-indigo-600">制作中...</span>
-                  </div>
+                  ))}
                 </div>
               </div>
-            )}
-          </div>
+
+              {/* 幻灯片导航指示器 */}
+              <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 flex space-x-2">
+                {slides.map((_, index) => (
+                  <div
+                    key={index}
+                    onClick={() => setCurrentSlide(index)}
+                    className={`w-3 h-3 rounded-full cursor-pointer transition-all duration-300 ${
+                      index === currentSlide ? "bg-white scale-125" : "bg-white/50 hover:bg-white/80"
+                    }`}
+                  />
+                ))}
+              </div>
+
+              {/* 幻灯片编号 */}
+              <div className="absolute top-6 right-6 bg-black/30 backdrop-blur-sm rounded-full px-3 py-1 text-white text-sm">
+                {currentSlide + 1} / {slides.length}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
-      <style jsx>{`
-        @keyframes fadeIn {
-          from {
-            opacity: 0;
-            transform: translateY(10px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        .animate-fadeIn {
-          animation: fadeIn 0.5s ease-out forwards;
-        }
-      `}</style>
+      {/* 状态指示器 */}
+      <div className="fixed bottom-8 right-8 flex flex-col space-y-2">
+        {isListening && (
+          <div className="bg-red-500/20 backdrop-blur-sm rounded-full p-3 border border-red-400/30">
+            <Mic className="w-5 h-5 text-red-400 animate-pulse" />
+          </div>
+        )}
+        {gestureMode !== "idle" && (
+          <div className="bg-blue-500/20 backdrop-blur-sm rounded-full p-3 border border-blue-400/30">
+            <Hand className="w-5 h-5 text-blue-400" />
+          </div>
+        )}
+        {isPreviewMode && (
+          <div className="bg-green-500/20 backdrop-blur-sm rounded-full p-3 border border-green-400/30">
+            <Eye className="w-5 h-5 text-green-400" />
+          </div>
+        )}
+      </div>
+
+      {/* 交互提示 */}
+      <div className="fixed bottom-8 left-8 bg-black/40 backdrop-blur-xl rounded-2xl border border-white/20 p-4">
+        <div className="text-white text-sm space-y-1">
+          <p>👆 左右滑动: 切换幻灯片</p>
+          <p>🤏 双指缩放: 预览模式</p>
+          <p>🗣️ 语音: "下一张"、"预览模式"</p>
+          <p>📱 上下滑动: 切换视图模式</p>
+        </div>
+      </div>
     </div>
   )
 }
