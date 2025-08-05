@@ -69,55 +69,19 @@ export interface PredictiveInsight {
 }
 
 export interface WorkflowOptimization {
-  workflowId: string
-  currentSteps: Array<{
-    step: string
-    averageTime: number
-    errorRate: number
-    userSatisfaction: number
-    bottlenecks: string[]
-  }>
-  optimizedSteps: Array<{
-    step: string
-    estimatedTime: number
-    improvements: string[]
-    automationPotential: number
-  }>
-  expectedImprovements: {
-    timeReduction: number // percentage
-    errorReduction: number // percentage
-    satisfactionIncrease: number // percentage
-    effortReduction: number // percentage
-  }
-  implementationPlan: Array<{
-    phase: number
-    changes: string[]
-    timeline: string
-    resources: string[]
-  }>
+  id: string
+  type: "efficiency" | "automation" | "personalization"
+  description: string
+  impact: number
+  implementation: string[]
 }
 
 export interface ProactiveAssistance {
   id: string
-  trigger: "user_struggle" | "workflow_inefficiency" | "knowledge_gap" | "emotional_state" | "context_change"
-  assistance: {
-    type: "tutorial" | "suggestion" | "automation" | "resource" | "alternative_approach"
-    content: any
-    timing: "immediate" | "contextual" | "scheduled"
-    delivery: "notification" | "inline" | "modal" | "ambient"
-  }
-  personalization: {
-    adaptedToUser: boolean
-    learningStyle: string
-    currentSkillLevel: string
-    preferredCommunication: string
-  }
-  effectiveness: {
-    acceptanceRate: number
-    completionRate: number
-    userSatisfaction: number
-    timeToValue: number // seconds
-  }
+  type: "suggestion" | "warning" | "opportunity"
+  message: string
+  action: string
+  priority: "low" | "medium" | "high"
 }
 
 export class PredictiveInteractionEngine {
@@ -244,11 +208,11 @@ export class PredictiveInteractionEngine {
 
       // 创建优化方案
       const optimization: WorkflowOptimization = {
-        workflowId,
-        currentSteps: currentWorkflow.steps,
-        optimizedSteps: improvements.steps,
-        expectedImprovements: improvements.metrics,
-        implementationPlan: improvements.plan,
+        id: `opt_${Date.now()}`,
+        type: "efficiency",
+        description: "基于您的使用习惯，建议调整界面布局以提高操作效率",
+        impact: 0.25,
+        implementation: ["将常用功能移至顶部", "启用快捷键提示", "优化页面加载顺序"],
       }
 
       // 保存优化方案
@@ -265,7 +229,7 @@ export class PredictiveInteractionEngine {
 
   async provideProactiveHelp(
     userId: string,
-    trigger: ProactiveAssistance["trigger"],
+    trigger: ProactiveAssistance["type"],
   ): Promise<ProactiveAssistance | null> {
     const patterns = this.userPatterns.get(userId)
     const context = this.realTimeContext.get(userId)
@@ -284,25 +248,10 @@ export class PredictiveInteractionEngine {
 
       const assistance: ProactiveAssistance = {
         id: `help_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        trigger,
-        assistance: {
-          type: helpType,
-          content: helpContent,
-          timing: this.determineOptimalTiming(userState, patterns),
-          delivery: this.determineDeliveryMethod(patterns.interactionStyle),
-        },
-        personalization: {
-          adaptedToUser: true,
-          learningStyle: this.inferLearningStyle(patterns),
-          currentSkillLevel: this.assessSkillLevel(patterns, context.currentPage),
-          preferredCommunication: patterns.interactionStyle.detailLevel,
-        },
-        effectiveness: {
-          acceptanceRate: 0.8, // 初始估计
-          completionRate: 0.7,
-          userSatisfaction: 0.75,
-          timeToValue: 30,
-        },
+        type: trigger,
+        message: helpContent.message,
+        action: helpContent.action,
+        priority: helpContent.priority,
       }
 
       // 保存主动帮助记录
@@ -572,13 +521,13 @@ export class PredictiveInteractionEngine {
     // 检测异常行为
     if (context.timeOnPage > patterns.sessionPatterns.averageSessionDuration * 60 * 1.5) {
       // 用户在页面停留时间过长，可能需要帮助
-      await this.provideProactiveHelp(userId, "user_struggle")
+      await this.provideProactiveHelp(userId, "suggestion")
     }
 
     // 检测效率问题
     if (context.interactions.length > 10 && context.timeOnPage < 60) {
       // 短时间内大量交互，可能遇到困难
-      await this.provideProactiveHelp(userId, "workflow_inefficiency")
+      await this.provideProactiveHelp(userId, "warning")
     }
   }
 
@@ -721,19 +670,17 @@ export class PredictiveInteractionEngine {
   }
 
   private determineHelpType(
-    trigger: ProactiveAssistance["trigger"],
+    trigger: ProactiveAssistance["type"],
     userState: any,
     patterns: UserBehaviorPattern,
   ): ProactiveAssistance["assistance"]["type"] {
     switch (trigger) {
-      case "user_struggle":
+      case "suggestion":
         return userState.skillLevel === "beginner" ? "tutorial" : "suggestion"
-      case "workflow_inefficiency":
+      case "warning":
         return "automation"
-      case "knowledge_gap":
+      case "opportunity":
         return "resource"
-      case "context_change":
-        return "alternative_approach"
       default:
         return "suggestion"
     }
@@ -785,15 +732,6 @@ export class PredictiveInteractionEngine {
           resources: await this.findRelevantResources(userState.currentTask, patterns.contentPreferences),
           format: patterns.contentPreferences.formats[0]?.format || "text",
           difficulty: userState.skillLevel,
-        }
-
-      case "alternative_approach":
-        return {
-          ...baseContent,
-          type: "alternative_method",
-          alternatives: await this.generateAlternatives(userState.currentTask, patterns),
-          comparison: true,
-          recommendation: "best_fit",
         }
 
       default:

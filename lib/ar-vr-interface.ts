@@ -37,128 +37,121 @@ export interface SpatialUI {
 
 export interface XRSession {
   id: string
-  mode: "ar" | "vr"
-  isActive: boolean
+  type: "ar" | "vr" | "mixed"
+  status: "active" | "paused" | "ended"
   startTime: number
-  spatialElements: Map<string, SpatialUI>
-  gestureHistory: SpatialGesture[]
-  voiceHistory: VoiceCommand[]
-  eyeGazeData?: Array<{ x: number; y: number; timestamp: number }>
+  spatialElements: any[]
 }
 
 export class ARVRInterfaceManager {
-  private xrSession: XRSession | null = null
-  private xrCapabilities: XRCapabilities | null = null
+  private static instance: ARVRInterfaceManager
+  private currentSession: XRSession | null = null
+  private capabilities = {
+    hasAR: false,
+    hasVR: false,
+    hasMixed: false,
+  }
+
   private gestureRecognizer: any = null
   private voiceRecognizer: any = null
   private spatialElements: Map<string, SpatialUI> = new Map()
   private eventListeners: Map<string, Function[]> = new Map()
 
+  static getInstance(): ARVRInterfaceManager {
+    if (!ARVRInterfaceManager.instance) {
+      ARVRInterfaceManager.instance = new ARVRInterfaceManager()
+    }
+    return ARVRInterfaceManager.instance
+  }
+
   async initialize(): Promise<boolean> {
     try {
-      // 检测XR能力
-      this.xrCapabilities = await this.detectXRCapabilities()
-
-      if (!this.xrCapabilities.supportsAR && !this.xrCapabilities.supportsVR) {
-        console.warn("设备不支持AR/VR功能")
-        return false
+      // 检测WebXR支持
+      const xr = (navigator as any).xr
+      if (xr) {
+        this.capabilities.hasAR = await xr.isSessionSupported("immersive-ar")
+        this.capabilities.hasVR = await xr.isSessionSupported("immersive-vr")
+        this.capabilities.hasMixed = this.capabilities.hasAR && this.capabilities.hasVR
       }
 
-      // 初始化手势识别
-      if (this.xrCapabilities.hasHandTracking) {
-        await this.initializeGestureRecognition()
+      // 检测手势追踪
+      if (this.capabilities.hasAR && xr) {
+        this.capabilities.hasHandTracking = await xr.isSessionSupported("immersive-ar", {
+          optionalFeatures: ["hand-tracking"],
+        })
       }
 
-      // 初始化语音识别
-      if (this.xrCapabilities.hasVoiceCommands) {
-        await this.initializeVoiceRecognition()
+      // 检测眼动追踪
+      if (this.capabilities.hasAR && xr) {
+        this.capabilities.hasEyeTracking = await xr.isSessionSupported("immersive-ar", {
+          optionalFeatures: ["eye-tracking"],
+        })
       }
 
-      console.log("AR/VR界面管理器初始化完成")
-      return true
+      // 检测语音命令支持
+      this.capabilities.hasVoiceCommands = "webkitSpeechRecognition" in window || "SpeechRecognition" in window
+
+      return this.capabilities.hasAR || this.capabilities.hasVR
     } catch (error) {
-      console.error("AR/VR初始化失败:", error)
+      console.warn("WebXR不支持:", error)
       return false
     }
   }
 
   async startARSession(): Promise<boolean> {
-    if (!this.xrCapabilities?.supportsAR) {
-      console.error("设备不支持AR")
+    if (!this.capabilities.hasAR) {
+      console.warn("AR不支持")
       return false
     }
 
-    try {
-      // @ts-ignore
-      const xrSession = await navigator.xr?.requestSession("immersive-ar", {
-        requiredFeatures: ["local", "hand-tracking"],
-        optionalFeatures: ["eye-tracking", "voice-input"],
-      })
-
-      if (xrSession) {
-        this.xrSession = {
-          id: `ar_session_${Date.now()}`,
-          mode: "ar",
-          isActive: true,
-          startTime: Date.now(),
-          spatialElements: new Map(),
-          gestureHistory: [],
-          voiceHistory: [],
-        }
-
-        // 设置XR会话事件监听器
-        this.setupXRSessionListeners(xrSession)
-
-        // 创建默认的空间UI元素
-        await this.createDefaultSpatialUI()
-
-        this.emit("ar-session-started", this.xrSession)
-        return true
-      }
-
-      return false
-    } catch (error) {
-      console.error("启动AR会话失败:", error)
-      return false
+    this.currentSession = {
+      id: `ar_session_${Date.now()}`,
+      type: "ar",
+      status: "active",
+      startTime: Date.now(),
+      spatialElements: [],
     }
+
+    // 初始化手势识别
+    if (this.capabilities.hasHandTracking) {
+      await this.initializeGestureRecognition()
+    }
+
+    // 初始化语音识别
+    if (this.capabilities.hasVoiceCommands) {
+      await this.initializeVoiceRecognition()
+    }
+
+    this.emit("ar-session-started", this.currentSession)
+    return true
   }
 
   async startVRSession(): Promise<boolean> {
-    if (!this.xrCapabilities?.supportsVR) {
-      console.error("设备不支持VR")
+    if (!this.capabilities.hasVR) {
+      console.warn("VR不支持")
       return false
     }
 
-    try {
-      // @ts-ignore
-      const xrSession = await navigator.xr?.requestSession("immersive-vr", {
-        requiredFeatures: ["local", "hand-tracking"],
-        optionalFeatures: ["eye-tracking", "voice-input"],
-      })
-
-      if (xrSession) {
-        this.xrSession = {
-          id: `vr_session_${Date.now()}`,
-          mode: "vr",
-          isActive: true,
-          startTime: Date.now(),
-          spatialElements: new Map(),
-          gestureHistory: [],
-          voiceHistory: [],
-        }
-
-        this.setupXRSessionListeners(xrSession)
-        await this.createDefaultSpatialUI()
-
-        this.emit("vr-session-started", this.xrSession)
-        return true
-      }
-
-      return false
-    } catch (error) {
-      console.error("启动VR会话失败:", error)
-      return false
+    this.currentSession = {
+      id: `vr_session_${Date.now()}`,
+      type: "vr",
+      status: "active",
+      startTime: Date.now(),
+      spatialElements: [],
     }
+
+    // 初始化手势识别
+    if (this.capabilities.hasHandTracking) {
+      await this.initializeGestureRecognition()
+    }
+
+    // 初始化语音识别
+    if (this.capabilities.hasVoiceCommands) {
+      await this.initializeVoiceRecognition()
+    }
+
+    this.emit("vr-session-started", this.currentSession)
+    return true
   }
 
   createSpatialElement(config: Omit<SpatialUI, "id">): string {
@@ -171,8 +164,8 @@ export class ARVRInterfaceManager {
 
     this.spatialElements.set(id, element)
 
-    if (this.xrSession) {
-      this.xrSession.spatialElements.set(id, element)
+    if (this.currentSession) {
+      this.currentSession.spatialElements.push(element)
     }
 
     this.emit("spatial-element-created", element)
@@ -186,8 +179,11 @@ export class ARVRInterfaceManager {
     Object.assign(element, updates)
     this.spatialElements.set(id, element)
 
-    if (this.xrSession) {
-      this.xrSession.spatialElements.set(id, element)
+    if (this.currentSession) {
+      const index = this.currentSession.spatialElements.findIndex((el: SpatialUI) => el.id === id)
+      if (index > -1) {
+        this.currentSession.spatialElements[index] = element
+      }
     }
 
     this.emit("spatial-element-updated", element)
@@ -197,8 +193,8 @@ export class ARVRInterfaceManager {
   removeSpatialElement(id: string): boolean {
     const removed = this.spatialElements.delete(id)
 
-    if (this.xrSession) {
-      this.xrSession.spatialElements.delete(id)
+    if (this.currentSession) {
+      this.currentSession.spatialElements = this.currentSession.spatialElements.filter((el: SpatialUI) => el.id !== id)
     }
 
     if (removed) {
@@ -221,12 +217,12 @@ export class ARVRInterfaceManager {
         timestamp: Date.now(),
       }
 
-      if (this.xrSession) {
-        this.xrSession.gestureHistory.push(gesture)
+      if (this.currentSession) {
+        this.currentSession.spatialElements.push(gesture)
 
         // 保持最近100个手势
-        if (this.xrSession.gestureHistory.length > 100) {
-          this.xrSession.gestureHistory.shift()
+        if (this.currentSession.spatialElements.length > 100) {
+          this.currentSession.spatialElements.shift()
         }
       }
 
@@ -263,11 +259,11 @@ export class ARVRInterfaceManager {
             timestamp: Date.now(),
           }
 
-          if (this.xrSession) {
-            this.xrSession.voiceHistory.push(command)
+          if (this.currentSession) {
+            this.currentSession.spatialElements.push(command)
 
-            if (this.xrSession.voiceHistory.length > 50) {
-              this.xrSession.voiceHistory.shift()
+            if (this.currentSession.spatialElements.length > 50) {
+              this.currentSession.spatialElements.shift()
             }
           }
 
@@ -305,23 +301,17 @@ export class ARVRInterfaceManager {
     return this.createSpatialElement(visualizationConfig)
   }
 
-  createSpatialMenu(items: Array<{ label: string; action: string; icon?: string }>): string {
-    const menuConfig: Omit<SpatialUI, "id"> = {
+  createSpatialMenu(items: Array<{ label: string; action: string }>): void {
+    if (!this.currentSession) return
+
+    const menuElement = {
+      id: `menu_${Date.now()}`,
       type: "menu",
-      position: { x: 0.5, y: 1.2, z: -1 }, // 用户右侧
-      rotation: { x: 0, y: -30, z: 0 }, // 稍微朝向用户
-      scale: { x: 1, y: 1, z: 1 },
-      content: {
-        items,
-        layout: "circular",
-        style: "floating",
-      },
-      interactive: true,
-      visible: true,
-      anchored: true,
+      items,
+      position: { x: 0, y: 1.5, z: -2 },
     }
 
-    return this.createSpatialElement(menuConfig)
+    this.currentSession.spatialElements.push(menuElement)
   }
 
   createFloatingPanel(content: any, position?: { x: number; y: number; z: number }): string {
@@ -345,10 +335,10 @@ export class ARVRInterfaceManager {
   }
 
   endSession(): void {
-    if (this.xrSession) {
-      this.xrSession.isActive = false
-      this.emit("xr-session-ended", this.xrSession)
-      this.xrSession = null
+    if (this.currentSession) {
+      this.currentSession.status = "ended"
+      this.emit("xr-session-ended", this.currentSession)
+      this.currentSession = null
     }
 
     // 清理空间元素
@@ -364,7 +354,7 @@ export class ARVRInterfaceManager {
   }
 
   getSession(): XRSession | null {
-    return this.xrSession
+    return this.currentSession
   }
 
   getSpatialElements(): SpatialUI[] {
@@ -386,52 +376,6 @@ export class ARVRInterfaceManager {
         listeners.splice(index, 1)
       }
     }
-  }
-
-  private async detectXRCapabilities(): Promise<XRCapabilities> {
-    const capabilities: XRCapabilities = {
-      supportsAR: false,
-      supportsVR: false,
-      hasHandTracking: false,
-      hasEyeTracking: false,
-      hasVoiceCommands: false,
-      supportedFeatures: [],
-    }
-
-    try {
-      // @ts-ignore
-      if ("xr" in navigator) {
-        // @ts-ignore
-        const xr = navigator.xr
-
-        capabilities.supportsAR = await xr.isSessionSupported("immersive-ar")
-        capabilities.supportsVR = await xr.isSessionSupported("immersive-vr")
-
-        // 检测手势追踪
-        capabilities.hasHandTracking = await xr.isSessionSupported("immersive-ar", {
-          optionalFeatures: ["hand-tracking"],
-        })
-
-        // 检测眼动追踪
-        capabilities.hasEyeTracking = await xr.isSessionSupported("immersive-ar", {
-          optionalFeatures: ["eye-tracking"],
-        })
-      }
-
-      // 检测语音命令支持
-      capabilities.hasVoiceCommands = "webkitSpeechRecognition" in window || "SpeechRecognition" in window
-
-      // 收集支持的功能
-      if (capabilities.supportsAR) capabilities.supportedFeatures.push("ar")
-      if (capabilities.supportsVR) capabilities.supportedFeatures.push("vr")
-      if (capabilities.hasHandTracking) capabilities.supportedFeatures.push("hand-tracking")
-      if (capabilities.hasEyeTracking) capabilities.supportedFeatures.push("eye-tracking")
-      if (capabilities.hasVoiceCommands) capabilities.supportedFeatures.push("voice-commands")
-    } catch (error) {
-      console.error("XR能力检测失败:", error)
-    }
-
-    return capabilities
   }
 
   private async initializeGestureRecognition(): Promise<void> {
@@ -462,37 +406,6 @@ export class ARVRInterfaceManager {
     } catch (error) {
       console.error("语音识别初始化失败:", error)
     }
-  }
-
-  private setupXRSessionListeners(xrSession: any): void {
-    xrSession.addEventListener("end", () => {
-      this.endSession()
-    })
-
-    // 设置输入源监听器
-    xrSession.addEventListener("inputsourceschange", (event: any) => {
-      console.log("输入源变化:", event)
-    })
-  }
-
-  private async createDefaultSpatialUI(): Promise<void> {
-    // 创建主菜单
-    this.createSpatialMenu([
-      { label: "搜索", action: "search", icon: "🔍" },
-      { label: "创建", action: "create", icon: "✨" },
-      { label: "设置", action: "settings", icon: "⚙️" },
-      { label: "帮助", action: "help", icon: "❓" },
-    ])
-
-    // 创建状态面板
-    this.createFloatingPanel(
-      {
-        title: "AI助手状态",
-        content: "准备就绪",
-        type: "status",
-      },
-      { x: -0.8, y: 1.5, z: -1 },
-    )
   }
 
   private classifyGesture(gestureData: any): SpatialGesture["type"] {
@@ -605,4 +518,4 @@ export class ARVRInterfaceManager {
 }
 
 // 全局实例
-export const arvrInterface = new ARVRInterfaceManager()
+export const arvrInterface = ARVRInterfaceManager.getInstance()

@@ -1,11 +1,11 @@
 // 跨设备同步管理器
-export interface DeviceInfo {
+export interface Device {
   id: string
   name: string
-  type: "desktop" | "mobile" | "tablet" | "watch" | "ar" | "vr"
-  capabilities: DeviceCapabilities
-  lastSeen: Date
-  isOnline: boolean
+  type: "desktop" | "mobile" | "tablet" | "watch" | "tv"
+  status: "online" | "offline" | "syncing"
+  capabilities: string[]
+  lastSeen: number
 }
 
 export interface DeviceCapabilities {
@@ -25,7 +25,7 @@ export interface SyncData {
   id: string
   type: "conversation" | "settings" | "history" | "favorites" | "custom"
   data: any
-  timestamp: Date
+  timestamp: number
   deviceId: string
   version: number
 }
@@ -37,23 +37,65 @@ export interface SyncConflict {
   conflictType: "timestamp" | "version" | "content"
 }
 
+class ConflictResolver {
+  async resolve(conflict: SyncConflict): Promise<SyncData> {
+    switch (conflict.conflictType) {
+      case "timestamp":
+        // 选择最新的数据
+        return conflict.localData.timestamp > conflict.remoteData.timestamp ? conflict.localData : conflict.remoteData
+
+      case "version":
+        // 选择版本号更高的数据
+        return conflict.localData.version > conflict.remoteData.version ? conflict.localData : conflict.remoteData
+
+      case "content":
+        // 尝试合并内容
+        return await this.mergeContent(conflict.localData, conflict.remoteData)
+
+      default:
+        return conflict.remoteData
+    }
+  }
+
+  private async mergeContent(localData: SyncData, remoteData: SyncData): Promise<SyncData> {
+    // 简单的合并策略，实际应用中可能需要更复杂的逻辑
+    const mergedData = {
+      ...localData,
+      data: { ...localData.data, ...remoteData.data },
+      version: Math.max(localData.version, remoteData.version) + 1,
+      timestamp: Date.now(),
+    }
+
+    return mergedData
+  }
+}
+
 export class CrossDeviceSyncManager {
-  private devices: Map<string, DeviceInfo> = new Map()
+  private static instance: CrossDeviceSyncManager
+  private devices: Map<string, Device> = new Map()
   private syncQueue: SyncData[] = []
+  private collaborationSessions: Map<string, any> = new Map()
   private conflictResolver: ConflictResolver
   private syncInterval: NodeJS.Timeout | null = null
 
-  constructor() {
+  private constructor() {
     this.conflictResolver = new ConflictResolver()
     this.startSyncProcess()
   }
 
+  static getInstance(): CrossDeviceSyncManager {
+    if (!CrossDeviceSyncManager.instance) {
+      CrossDeviceSyncManager.instance = new CrossDeviceSyncManager()
+    }
+    return CrossDeviceSyncManager.instance
+  }
+
   // 注册设备
-  async registerDevice(device: Omit<DeviceInfo, "lastSeen" | "isOnline">): Promise<void> {
-    const deviceInfo: DeviceInfo = {
+  async registerDevice(device: Omit<Device, "lastSeen" | "status">): Promise<void> {
+    const deviceInfo: Device = {
       ...device,
-      lastSeen: new Date(),
-      isOnline: true,
+      lastSeen: Date.now(),
+      status: "online",
     }
 
     this.devices.set(device.id, deviceInfo)
@@ -61,20 +103,20 @@ export class CrossDeviceSyncManager {
   }
 
   // 获取所有设备
-  getDevices(): DeviceInfo[] {
+  getDevices(): Device[] {
     return Array.from(this.devices.values())
   }
 
   // 获取在线设备
-  getOnlineDevices(): DeviceInfo[] {
-    return this.getDevices().filter((device) => device.isOnline)
+  getOnlineDevices(): Device[] {
+    return this.getDevices().filter((device) => device.status === "online")
   }
 
   // 同步数据到所有设备
   async syncToAllDevices(data: Omit<SyncData, "id" | "timestamp" | "version">): Promise<void> {
     const syncData: SyncData = {
       id: this.generateSyncId(),
-      timestamp: new Date(),
+      timestamp: Date.now(),
       version: 1,
       ...data,
     }
@@ -86,13 +128,13 @@ export class CrossDeviceSyncManager {
   // 同步数据到特定设备
   async syncToDevice(deviceId: string, data: Omit<SyncData, "id" | "timestamp" | "version">): Promise<void> {
     const device = this.devices.get(deviceId)
-    if (!device || !device.isOnline) {
+    if (!device || device.status === "offline") {
       throw new Error(`设备 ${deviceId} 不在线或不存在`)
     }
 
     const syncData: SyncData = {
       id: this.generateSyncId(),
-      timestamp: new Date(),
+      timestamp: Date.now(),
       version: 1,
       ...data,
     }
@@ -120,8 +162,8 @@ export class CrossDeviceSyncManager {
       // 更新设备最后见到时间
       const device = this.devices.get(data.deviceId)
       if (device) {
-        device.lastSeen = new Date()
-        device.isOnline = true
+        device.lastSeen = Date.now()
+        device.status = "online"
       }
     } catch (error) {
       console.error("处理同步数据失败:", error)
@@ -170,12 +212,12 @@ export class CrossDeviceSyncManager {
   }
 
   // 广播设备更新
-  private async broadcastDeviceUpdate(device: DeviceInfo): Promise<void> {
+  private async broadcastDeviceUpdate(device: Device): Promise<void> {
     const updateData: SyncData = {
       id: this.generateSyncId(),
       type: "custom",
       data: { type: "device_update", device },
-      timestamp: new Date(),
+      timestamp: Date.now(),
       deviceId: device.id,
       version: 1,
     }
@@ -185,12 +227,12 @@ export class CrossDeviceSyncManager {
 
   // 检查设备状态
   private async checkDeviceStatus(): Promise<void> {
-    const now = new Date()
+    const now = Date.now()
     const timeout = 30000 // 30秒超时
 
     for (const [deviceId, device] of this.devices) {
-      if (device.isOnline && now.getTime() - device.lastSeen.getTime() > timeout) {
-        device.isOnline = false
+      if (device.status === "online" && now - device.lastSeen > timeout) {
+        device.status = "offline"
         await this.broadcastDeviceUpdate(device)
       }
     }
@@ -207,7 +249,7 @@ export class CrossDeviceSyncManager {
       }
     }
 
-    if (localData.timestamp.getTime() !== remoteData.timestamp.getTime()) {
+    if (localData.timestamp !== remoteData.timestamp) {
       return {
         id: localData.id,
         localData,
@@ -290,41 +332,69 @@ export class CrossDeviceSyncManager {
   private generateSyncId(): string {
     return `sync_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
   }
-}
 
-// 冲突解决器
-class ConflictResolver {
-  async resolve(conflict: SyncConflict): Promise<SyncData> {
-    switch (conflict.conflictType) {
-      case "timestamp":
-        // 选择最新的数据
-        return conflict.localData.timestamp > conflict.remoteData.timestamp ? conflict.localData : conflict.remoteData
+  async discoverDevices(): Promise<Device[]> {
+    // 模拟设备发现
+    const mockDevices: Device[] = [
+      {
+        id: "device_1",
+        name: "iPhone 15 Pro",
+        type: "mobile",
+        status: "online",
+        capabilities: ["camera", "microphone", "gps", "sensors"],
+        lastSeen: Date.now(),
+      },
+      {
+        id: "device_2",
+        name: "MacBook Pro",
+        type: "desktop",
+        status: "online",
+        capabilities: ["camera", "microphone", "keyboard", "mouse"],
+        lastSeen: Date.now(),
+      },
+      {
+        id: "device_3",
+        name: "iPad Air",
+        type: "tablet",
+        status: "offline",
+        capabilities: ["camera", "microphone", "touch", "pencil"],
+        lastSeen: Date.now() - 300000,
+      },
+    ]
 
-      case "version":
-        // 选择版本号更高的数据
-        return conflict.localData.version > conflict.remoteData.version ? conflict.localData : conflict.remoteData
+    mockDevices.forEach((device) => {
+      this.devices.set(device.id, device)
+    })
 
-      case "content":
-        // 尝试合并内容
-        return await this.mergeContent(conflict.localData, conflict.remoteData)
-
-      default:
-        return conflict.remoteData
-    }
+    return mockDevices
   }
 
-  private async mergeContent(localData: SyncData, remoteData: SyncData): Promise<SyncData> {
-    // 简单的合并策略，实际应用中可能需要更复杂的逻辑
-    const mergedData = {
-      ...localData,
-      data: { ...localData.data, ...remoteData.data },
-      version: Math.max(localData.version, remoteData.version) + 1,
-      timestamp: new Date(),
+  async handoffToDevice(deviceId: string, context: any): Promise<boolean> {
+    const device = this.devices.get(deviceId)
+    if (!device || device.status === "offline") {
+      return false
     }
 
-    return mergedData
+    // 模拟设备切换
+    console.log(`切换到设备: ${device.name}`, context)
+    return true
+  }
+
+  async createCollaborationSession(name: string): Promise<string> {
+    const sessionId = `session_${Date.now()}`
+    this.collaborationSessions.set(sessionId, {
+      id: sessionId,
+      name,
+      participants: [],
+      createdAt: Date.now(),
+    })
+    return sessionId
+  }
+
+  destroy(): void {
+    this.devices.clear()
+    this.collaborationSessions.clear()
   }
 }
 
-// 创建全局同步管理器实例
-export const syncManager = new CrossDeviceSyncManager()
+export const crossDeviceSync = CrossDeviceSyncManager.getInstance()
