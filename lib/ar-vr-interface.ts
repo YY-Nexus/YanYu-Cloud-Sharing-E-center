@@ -1,31 +1,23 @@
-export interface XRCapabilities {
-  supportsAR: boolean
-  supportsVR: boolean
-  hasHandTracking: boolean
-  hasEyeTracking: boolean
-  hasVoiceCommands: boolean
-  supportedFeatures: string[]
-}
-
-export interface SpatialGesture {
-  type: "pinch" | "grab" | "point" | "swipe" | "tap" | "wave"
-  confidence: number
-  position: { x: number; y: number; z: number }
-  direction?: { x: number; y: number; z: number }
-  handedness: "left" | "right" | "both"
-  timestamp: number
-}
-
-export interface VoiceCommand {
-  command: string
-  confidence: number
-  parameters: Record<string, any>
-  timestamp: number
-}
-
-export interface SpatialUI {
+// AR/VR界面管理系统
+export interface XRDevice {
   id: string
-  type: "panel" | "button" | "menu" | "visualization" | "text" | "media"
+  name: string
+  type: "ar" | "vr" | "mixed"
+  capabilities: {
+    handTracking: boolean
+    eyeTracking: boolean
+    spatialMapping: boolean
+    passthrough: boolean
+    roomScale: boolean
+  }
+  status: "connected" | "disconnected" | "error"
+  batteryLevel?: number
+  lastConnected: Date
+}
+
+export interface SpatialElement {
+  id: string
+  type: "panel" | "button" | "menu" | "content" | "widget"
   position: { x: number; y: number; z: number }
   rotation: { x: number; y: number; z: number }
   scale: { x: number; y: number; z: number }
@@ -33,489 +25,691 @@ export interface SpatialUI {
   interactive: boolean
   visible: boolean
   anchored: boolean
+  metadata: Record<string, any>
+}
+
+export interface GestureEvent {
+  type: "tap" | "pinch" | "swipe" | "grab" | "point" | "voice"
+  position: { x: number; y: number; z: number }
+  direction?: { x: number; y: number; z: number }
+  intensity: number
+  duration: number
+  targetId?: string
+  timestamp: number
 }
 
 export interface XRSession {
   id: string
-  type: "ar" | "vr" | "mixed"
-  status: "active" | "paused" | "ended"
-  startTime: number
-  spatialElements: any[]
+  type: "immersive-ar" | "immersive-vr" | "inline"
+  device: XRDevice
+  startTime: Date
+  duration: number
+  elements: SpatialElement[]
+  interactions: GestureEvent[]
+  userPosition: { x: number; y: number; z: number }
+  userRotation: { x: number; y: number; z: number }
+  isActive: boolean
+  status: "starting" | "active" | "paused" | "ended"
 }
 
 export class ARVRInterfaceManager {
-  private static instance: ARVRInterfaceManager
-  private currentSession: XRSession | null = null
-  private capabilities = {
-    hasAR: false,
-    hasVR: false,
-    hasMixed: false,
-  }
+  private static xrSession: XRSession | null = null
+  private static spatialElements: Map<string, SpatialElement> = new Map()
+  private static gestureHandlers: Map<string, (event: GestureEvent) => void> = new Map()
+  private static isXRSupported = false
+  private static currentDevice: XRDevice | null = null
 
-  private gestureRecognizer: any = null
-  private voiceRecognizer: any = null
-  private spatialElements: Map<string, SpatialUI> = new Map()
-  private eventListeners: Map<string, Function[]> = new Map()
-
-  static getInstance(): ARVRInterfaceManager {
-    if (!ARVRInterfaceManager.instance) {
-      ARVRInterfaceManager.instance = new ARVRInterfaceManager()
-    }
-    return ARVRInterfaceManager.instance
-  }
-
-  async initialize(): Promise<boolean> {
+  static async initialize(): Promise<boolean> {
     try {
-      // 检测WebXR支持
-      const xr = (navigator as any).xr
-      if (xr) {
-        this.capabilities.hasAR = await xr.isSessionSupported("immersive-ar")
-        this.capabilities.hasVR = await xr.isSessionSupported("immersive-vr")
-        this.capabilities.hasMixed = this.capabilities.hasAR && this.capabilities.hasVR
-      }
-
-      // 检测手势追踪
-      if (this.capabilities.hasAR && xr) {
-        this.capabilities.hasHandTracking = await xr.isSessionSupported("immersive-ar", {
-          optionalFeatures: ["hand-tracking"],
-        })
-      }
-
-      // 检测眼动追踪
-      if (this.capabilities.hasAR && xr) {
-        this.capabilities.hasEyeTracking = await xr.isSessionSupported("immersive-ar", {
-          optionalFeatures: ["eye-tracking"],
-        })
-      }
-
-      // 检测语音命令支持
-      this.capabilities.hasVoiceCommands = "webkitSpeechRecognition" in window || "SpeechRecognition" in window
-
-      return this.capabilities.hasAR || this.capabilities.hasVR
-    } catch (error) {
-      console.warn("WebXR不支持:", error)
-      return false
-    }
-  }
-
-  async startARSession(): Promise<boolean> {
-    if (!this.capabilities.hasAR) {
-      console.warn("AR不支持")
-      return false
-    }
-
-    this.currentSession = {
-      id: `ar_session_${Date.now()}`,
-      type: "ar",
-      status: "active",
-      startTime: Date.now(),
-      spatialElements: [],
-    }
-
-    // 初始化手势识别
-    if (this.capabilities.hasHandTracking) {
-      await this.initializeGestureRecognition()
-    }
-
-    // 初始化语音识别
-    if (this.capabilities.hasVoiceCommands) {
-      await this.initializeVoiceRecognition()
-    }
-
-    this.emit("ar-session-started", this.currentSession)
-    return true
-  }
-
-  async startVRSession(): Promise<boolean> {
-    if (!this.capabilities.hasVR) {
-      console.warn("VR不支持")
-      return false
-    }
-
-    this.currentSession = {
-      id: `vr_session_${Date.now()}`,
-      type: "vr",
-      status: "active",
-      startTime: Date.now(),
-      spatialElements: [],
-    }
-
-    // 初始化手势识别
-    if (this.capabilities.hasHandTracking) {
-      await this.initializeGestureRecognition()
-    }
-
-    // 初始化语音识别
-    if (this.capabilities.hasVoiceCommands) {
-      await this.initializeVoiceRecognition()
-    }
-
-    this.emit("vr-session-started", this.currentSession)
-    return true
-  }
-
-  createSpatialElement(config: Omit<SpatialUI, "id">): string {
-    const id = `spatial_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-
-    const element: SpatialUI = {
-      id,
-      ...config,
-    }
-
-    this.spatialElements.set(id, element)
-
-    if (this.currentSession) {
-      this.currentSession.spatialElements.push(element)
-    }
-
-    this.emit("spatial-element-created", element)
-    return id
-  }
-
-  updateSpatialElement(id: string, updates: Partial<SpatialUI>): boolean {
-    const element = this.spatialElements.get(id)
-    if (!element) return false
-
-    Object.assign(element, updates)
-    this.spatialElements.set(id, element)
-
-    if (this.currentSession) {
-      const index = this.currentSession.spatialElements.findIndex((el: SpatialUI) => el.id === id)
-      if (index > -1) {
-        this.currentSession.spatialElements[index] = element
-      }
-    }
-
-    this.emit("spatial-element-updated", element)
-    return true
-  }
-
-  removeSpatialElement(id: string): boolean {
-    const removed = this.spatialElements.delete(id)
-
-    if (this.currentSession) {
-      this.currentSession.spatialElements = this.currentSession.spatialElements.filter((el: SpatialUI) => el.id !== id)
-    }
-
-    if (removed) {
-      this.emit("spatial-element-removed", id)
-    }
-
-    return removed
-  }
-
-  async processGesture(gestureData: any): Promise<SpatialGesture | null> {
-    if (!this.gestureRecognizer) return null
-
-    try {
-      const gesture: SpatialGesture = {
-        type: this.classifyGesture(gestureData),
-        confidence: gestureData.confidence || 0.8,
-        position: gestureData.position || { x: 0, y: 0, z: 0 },
-        direction: gestureData.direction,
-        handedness: gestureData.handedness || "right",
-        timestamp: Date.now(),
-      }
-
-      if (this.currentSession) {
-        this.currentSession.spatialElements.push(gesture)
-
-        // 保持最近100个手势
-        if (this.currentSession.spatialElements.length > 100) {
-          this.currentSession.spatialElements.shift()
+      if (typeof navigator !== "undefined" && "xr" in navigator) {
+        const xr = (navigator as any).xr
+        const arSupported = await xr.isSessionSupported("immersive-ar")
+        const vrSupported = await xr.isSessionSupported("immersive-vr")
+        this.isXRSupported = arSupported || vrSupported
+        
+        if (this.isXRSupported) {
+          console.log("XR支持已启用")
+          await this.detectDevices()
         }
+        return this.isXRSupported
+      }
+      return false
+    } catch (error) {
+      console.warn("XR初始化失败:", error)
+      return false
+    }
+  }
+
+  private static async detectDevices(): Promise<XRDevice[]> {
+    const devices: XRDevice[] = []
+    
+    try {
+      const mockDevices: XRDevice[] = [
+        {
+          id: "hololens-001",
+          name: "Microsoft HoloLens 2",
+          type: "ar",
+          capabilities: {
+            handTracking: true,
+            eyeTracking: true,
+            spatialMapping: true,
+            passthrough: true,
+            roomScale: true,
+          },
+          status: "connected",
+          batteryLevel: 85,
+          lastConnected: new Date(),
+        },
+        {
+          id: "quest-001",
+          name: "Meta Quest 3",
+          type: "mixed",
+          capabilities: {
+            handTracking: true,
+            eyeTracking: false,
+            spatialMapping: true,
+            passthrough: true,
+            roomScale: true,
+          },
+          status: "connected",
+          batteryLevel: 72,
+          lastConnected: new Date(),
+        },
+      ]
+      
+      devices.push(...mockDevices)
+      if (devices.length > 0) {
+        this.currentDevice = devices[0]
+      }
+    } catch (error) {
+      console.error("设备检测失败:", error)
+    }
+    
+    return devices
+  }
+
+  static async startARSession(): Promise<boolean> {
+    try {
+      const session = await this.startXRSession("immersive-ar")
+      return session !== null
+    } catch (error) {
+      console.error("启动AR会话失败:", error)
+      return false
+    }
+  }
+
+  static async startVRSession(): Promise<boolean> {
+    try {
+      const session = await this.startXRSession("immersive-vr")
+      return session !== null
+    } catch (error) {
+      console.error("启动VR会话失败:", error)
+      return false
+    }
+  }
+
+  static async startXRSession(type: "immersive-ar" | "immersive-vr" | "inline" = "immersive-ar"): Promise<XRSession | null> {
+    if (!this.isXRSupported || !this.currentDevice) {
+      throw new Error("XR不支持或设备未连接")
+    }
+
+    try {
+      const sessionId = `xr_session_${Date.now()}`
+      
+      this.xrSession = {
+        id: sessionId,
+        type,
+        device: this.currentDevice,
+        startTime: new Date(),
+        duration: 0,
+        elements: [],
+        interactions: [],
+        userPosition: { x: 0, y: 1.6, z: 0 },
+        userRotation: { x: 0, y: 0, z: 0 },
+        isActive: true,
+        status: "starting",
       }
 
-      // 处理手势命令
-      await this.handleGestureCommand(gesture)
-
-      this.emit("gesture-recognized", gesture)
-      return gesture
+      await this.setupDefaultEnvironment()
+      this.xrSession.status = "active"
+      console.log(`XR会话已启动: ${sessionId}`)
+      return this.xrSession
+      
     } catch (error) {
-      console.error("手势处理失败:", error)
+      console.error("启动XR会话失败:", error)
       return null
     }
   }
 
-  async processVoiceCommand(audioData: ArrayBuffer): Promise<VoiceCommand | null> {
-    if (!this.voiceRecognizer) return null
+  private static async setupDefaultEnvironment(): Promise<void> {
+    if (!this.xrSession) return
 
-    try {
-      // 使用Web Speech API或自定义语音识别
-      const recognition = new (window as any).webkitSpeechRecognition()
-      recognition.lang = "zh-CN"
-      recognition.continuous = false
-      recognition.interimResults = false
-
-      return new Promise((resolve) => {
-        recognition.onresult = (event: any) => {
-          const transcript = event.results[0][0].transcript
-          const confidence = event.results[0][0].confidence
-
-          const command: VoiceCommand = {
-            command: transcript,
-            confidence,
-            parameters: this.parseVoiceParameters(transcript),
-            timestamp: Date.now(),
-          }
-
-          if (this.currentSession) {
-            this.currentSession.spatialElements.push(command)
-
-            if (this.currentSession.spatialElements.length > 50) {
-              this.currentSession.spatialElements.shift()
-            }
-          }
-
-          this.handleVoiceCommand(command)
-          this.emit("voice-command-recognized", command)
-          resolve(command)
-        }
-
-        recognition.onerror = () => resolve(null)
-        recognition.start()
-      })
-    } catch (error) {
-      console.error("语音命令处理失败:", error)
-      return null
-    }
-  }
-
-  create3DVisualization(data: any, type: "chart" | "model" | "network" | "mindmap"): string {
-    const visualizationConfig: Omit<SpatialUI, "id"> = {
-      type: "visualization",
-      position: { x: 0, y: 1.5, z: -2 }, // 用户前方2米，高度1.5米
+    const mainMenu = this.createSpatialElement({
+      type: "menu",
+      position: { x: 0, y: 1.5, z: -2 },
       rotation: { x: 0, y: 0, z: 0 },
       scale: { x: 1, y: 1, z: 1 },
       content: {
-        type,
-        data,
-        interactive: true,
-        animations: this.getVisualizationAnimations(type),
+        title: "AI搜索助手",
+        items: [
+          { id: "search", label: "智能搜索", icon: "🔍" },
+          { id: "history", label: "搜索历史", icon: "📚" },
+          { id: "settings", label: "设置", icon: "⚙️" },
+          { id: "help", label: "帮助", icon: "❓" },
+        ],
       },
       interactive: true,
       visible: true,
-      anchored: false,
-    }
+      anchored: true,
+      metadata: { menuType: "main" },
+    })
 
-    return this.createSpatialElement(visualizationConfig)
-  }
-
-  createSpatialMenu(items: Array<{ label: string; action: string }>): void {
-    if (!this.currentSession) return
-
-    const menuElement = {
-      id: `menu_${Date.now()}`,
-      type: "menu",
-      items,
-      position: { x: 0, y: 1.5, z: -2 },
-    }
-
-    this.currentSession.spatialElements.push(menuElement)
-  }
-
-  createFloatingPanel(content: any, position?: { x: number; y: number; z: number }): string {
-    const panelConfig: Omit<SpatialUI, "id"> = {
+    const searchPanel = this.createSpatialElement({
       type: "panel",
-      position: position || { x: 0, y: 1.0, z: -1.5 },
-      rotation: { x: 0, y: 0, z: 0 },
-      scale: { x: 1, y: 1, z: 0.1 },
+      position: { x: 0, y: 1.2, z: -1.5 },
+      rotation: { x: -15, y: 0, z: 0 },
+      scale: { x: 1.2, y: 0.8, z: 1 },
       content: {
-        ...content,
-        background: "rgba(255, 255, 255, 0.9)",
-        border: "1px solid rgba(0, 0, 0, 0.1)",
-        borderRadius: "10px",
+        type: "search_input",
+        placeholder: "请说出您的问题或使用手势输入...",
+        voiceEnabled: true,
+        gestureEnabled: true,
       },
       interactive: true,
       visible: true,
       anchored: false,
-    }
+      metadata: { panelType: "search" },
+    })
 
-    return this.createSpatialElement(panelConfig)
+    const resultsArea = this.createSpatialElement({
+      type: "content",
+      position: { x: 0, y: 1, z: -3 },
+      rotation: { x: 0, y: 0, z: 0 },
+      scale: { x: 2, y: 1.5, z: 1 },
+      content: {
+        type: "results_container",
+        maxItems: 5,
+        layout: "grid",
+        results: [],
+      },
+      interactive: true,
+      visible: false,
+      anchored: true,
+      metadata: { containerType: "results" },
+    })
+
+    this.xrSession.elements.push(mainMenu, searchPanel, resultsArea)
   }
 
-  endSession(): void {
-    if (this.currentSession) {
-      this.currentSession.status = "ended"
-      this.emit("xr-session-ended", this.currentSession)
-      this.currentSession = null
+  static createSpatialElement(config: Omit<SpatialElement, "id">): SpatialElement {
+    const element: SpatialElement = {
+      id: `element_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      ...config,
     }
 
-    // 清理空间元素
+    this.spatialElements.set(element.id, element)
+    return element
+  }
+
+  static createSpatialMenu(items: Array<{ label: string; action: string }>): string {
+    const menuElement = this.createSpatialElement({
+      type: "menu",
+      position: { x: 0, y: 1.5, z: -2 },
+      rotation: { x: 0, y: 0, z: 0 },
+      scale: { x: 1, y: 1, z: 1 },
+      content: {
+        title: "空间菜单",
+        items: items.map((item, index) => ({
+          id: `menu_item_${index}`,
+          label: item.label,
+          action: item.action,
+        })),
+      },
+      interactive: true,
+      visible: true,
+      anchored: true,
+      metadata: { menuType: "spatial" },
+    })
+
+    if (this.xrSession) {
+      this.xrSession.elements.push(menuElement)
+    }
+
+    return menuElement.id
+  }
+
+  static updateSpatialElement(elementId: string, updates: Partial<SpatialElement>): boolean {
+    const element = this.spatialElements.get(elementId)
+    if (!element) return false
+
+    Object.assign(element, updates)
+    this.spatialElements.set(elementId, element)
+    this.renderElement(element)
+    return true
+  }
+
+  private static renderElement(element: SpatialElement): void {
+    if (!this.xrSession || !element.visible) return
+    console.log(`渲染空间元素: ${element.id}`, element)
+  }
+
+  static handleGesture(gesture: Omit<GestureEvent, "timestamp">): void {
+    const event: GestureEvent = {
+      ...gesture,
+      timestamp: Date.now(),
+    }
+
+    if (this.xrSession) {
+      this.xrSession.interactions.push(event)
+    }
+
+    const targetElement = gesture.targetId 
+      ? this.spatialElements.get(gesture.targetId)
+      : this.findElementAtPosition(gesture.position)
+
+    if (targetElement) {
+      this.processElementInteraction(targetElement, event)
+    }
+
+    const handler = this.gestureHandlers.get(gesture.type)
+    if (handler) {
+      handler(event)
+    }
+  }
+
+  private static findElementAtPosition(position: { x: number; y: number; z: number }): SpatialElement | null {
+    for (const element of this.spatialElements.values()) {
+      if (!element.visible || !element.interactive) continue
+
+      const distance = Math.sqrt(
+        Math.pow(element.position.x - position.x, 2) +
+        Math.pow(element.position.y - position.y, 2) +
+        Math.pow(element.position.z - position.z, 2)
+      )
+
+      if (distance < 0.5) {
+        return element
+      }
+    }
+
+    return null
+  }
+
+  private static processElementInteraction(element: SpatialElement, event: GestureEvent): void {
+    switch (element.type) {
+      case "button":
+        if (event.type === "tap") {
+          this.handleButtonClick(element, event)
+        }
+        break
+      case "menu":
+        if (event.type === "tap" || event.type === "point") {
+          this.handleMenuInteraction(element, event)
+        }
+        break
+      case "panel":
+        if (event.type === "voice") {
+          this.handleVoiceInput(element, event)
+        }
+        break
+    }
+  }
+
+  private static handleButtonClick(element: SpatialElement, event: GestureEvent): void {
+    console.log(`按钮被点击: ${element.id}`)
+    this.showElementFeedback(element, "click")
+    
+    if (element.content?.action) {
+      this.executeAction(element.content.action, element, event)
+    }
+  }
+
+  private static handleMenuInteraction(element: SpatialElement, event: GestureEvent): void {
+    if (!element.content?.items) return
+
+    const selectedItem = this.getSelectedMenuItem(element, event.position)
+    if (selectedItem) {
+      console.log(`菜单项被选中: ${selectedItem.id}`)
+      this.executeAction(selectedItem.action || selectedItem.id, element, event)
+    }
+  }
+
+  private static getSelectedMenuItem(element: SpatialElement, position: { x: number; y: number; z: number }): any {
+    return element.content?.items?.[0] || null
+  }
+
+  private static handleVoiceInput(element: SpatialElement, event: GestureEvent): void {
+    if (element.content?.type === "search_input") {
+      console.log("处理语音搜索输入")
+      this.processVoiceSearch("示例语音查询")
+    }
+  }
+
+  private static processVoiceSearch(query: string): void {
+    console.log(`语音搜索: ${query}`)
+    
+    const resultsElement = Array.from(this.spatialElements.values())
+      .find(e => e.content?.type === "results_container")
+    
+    if (resultsElement) {
+      this.updateSpatialElement(resultsElement.id, { visible: true })
+      
+      const mockResults = [
+        { title: "搜索结果1", content: "相关内容..." },
+        { title: "搜索结果2", content: "相关内容..." },
+        { title: "搜索结果3", content: "相关内容..." },
+      ]
+      
+      this.updateSpatialElement(resultsElement.id, {
+        content: { ...resultsElement.content, results: mockResults }
+      })
+    }
+  }
+
+  private static executeAction(action: string, element: SpatialElement, event: GestureEvent): void {
+    switch (action) {
+      case "search":
+        this.activateSearchMode()
+        break
+      case "history":
+        this.showSearchHistory()
+        break
+      case "settings":
+        this.openSettings()
+        break
+      case "help":
+        this.showHelp()
+        break
+      case "ai-assistant":
+        this.openAIAssistant()
+        break
+      case "visualization":
+        this.openDataVisualization()
+        break
+      case "collaboration":
+        this.openCollaborationSpace()
+        break
+      default:
+        console.log(`未知动作: ${action}`)
+    }
+  }
+
+  private static activateSearchMode(): void {
+    console.log("激活搜索模式")
+    
+    const searchPanel = Array.from(this.spatialElements.values())
+      .find(e => e.content?.type === "search_input")
+    
+    if (searchPanel) {
+      this.showElementFeedback(searchPanel, "highlight")
+    }
+  }
+
+  private static showSearchHistory(): void {
+    console.log("显示搜索历史")
+    
+    const historyPanel = this.createSpatialElement({
+      type: "panel",
+      position: { x: 1.5, y: 1.5, z: -2 },
+      rotation: { x: 0, y: -30, z: 0 },
+      scale: { x: 1, y: 1.2, z: 1 },
+      content: {
+        type: "history_list",
+        items: [
+          "人工智能的发展历程",
+          "机器学习算法比较",
+          "深度学习应用案例",
+        ],
+      },
+      interactive: true,
+      visible: true,
+      anchored: true,
+      metadata: { panelType: "history" },
+    })
+
+    if (this.xrSession) {
+      this.xrSession.elements.push(historyPanel)
+    }
+  }
+
+  private static openSettings(): void {
+    console.log("打开设置")
+    
+    const settingsPanel = this.createSpatialElement({
+      type: "panel",
+      position: { x: -1.5, y: 1.5, z: -2 },
+      rotation: { x: 0, y: 30, z: 0 },
+      scale: { x: 1, y: 1.2, z: 1 },
+      content: {
+        type: "settings_panel",
+        sections: [
+          { title: "显示设置", options: ["亮度", "对比度", "字体大小"] },
+          { title: "交互设置", options: ["手势灵敏度", "语音识别", "眼动追踪"] },
+          { title: "隐私设置", options: ["数据收集", "位置信息", "使用统计"] },
+        ],
+      },
+      interactive: true,
+      visible: true,
+      anchored: true,
+      metadata: { panelType: "settings" },
+    })
+
+    if (this.xrSession) {
+      this.xrSession.elements.push(settingsPanel)
+    }
+  }
+
+  private static showHelp(): void {
+    console.log("显示帮助")
+    
+    const helpPanel = this.createSpatialElement({
+      type: "panel",
+      position: { x: 0, y: 2, z: -1 },
+      rotation: { x: -30, y: 0, z: 0 },
+      scale: { x: 1.5, y: 1, z: 1 },
+      content: {
+        type: "help_content",
+        sections: [
+          {
+            title: "手势操作",
+            content: [
+              "👆 点击 - 选择和确认",
+              "👋 挥手 - 返回上级",
+              "👌 捏合 - 缩放内容",
+              "🗣️ 语音 - 说出问题进行搜索",
+            ],
+          },
+          {
+            title: "快速开始",
+            content: [
+              "1. 说出您的问题或点击搜索框",
+              "2. 查看搜索结果和相关建议",
+              "3. 点击结果获取详细信息",
+              "4. 使用手势浏览和操作内容",
+            ],
+          },
+        ],
+      },
+      interactive: true,
+      visible: true,
+      anchored: false,
+      metadata: { panelType: "help" },
+    })
+
+    if (this.xrSession) {
+      this.xrSession.elements.push(helpPanel)
+    }
+  }
+
+  private static openAIAssistant(): void {
+    console.log("打开AI助手")
+    
+    const aiPanel = this.createSpatialElement({
+      type: "panel",
+      position: { x: 0, y: 1.5, z: -1.5 },
+      rotation: { x: 0, y: 0, z: 0 },
+      scale: { x: 1.5, y: 1.2, z: 1 },
+      content: {
+        type: "ai_assistant",
+        title: "AI智能助手",
+        status: "ready",
+        capabilities: ["问答", "分析", "建议", "创作"],
+      },
+      interactive: true,
+      visible: true,
+      anchored: true,
+      metadata: { panelType: "ai_assistant" },
+    })
+
+    if (this.xrSession) {
+      this.xrSession.elements.push(aiPanel)
+    }
+  }
+
+  private static openDataVisualization(): void {
+    console.log("打开数据可视化")
+    
+    const vizPanel = this.createSpatialElement({
+      type: "content",
+      position: { x: 2, y: 1.5, z: -2 },
+      rotation: { x: 0, y: -45, z: 0 },
+      scale: { x: 1.5, y: 1.5, z: 1 },
+      content: {
+        type: "data_visualization",
+        charts: ["柱状图", "折线图", "饼图", "散点图"],
+        data: [],
+      },
+      interactive: true,
+      visible: true,
+      anchored: true,
+      metadata: { panelType: "visualization" },
+    })
+
+    if (this.xrSession) {
+      this.xrSession.elements.push(vizPanel)
+    }
+  }
+
+  private static openCollaborationSpace(): void {
+    console.log("打开协作空间")
+    
+    const collabPanel = this.createSpatialElement({
+      type: "content",
+      position: { x: -2, y: 1.5, z: -2 },
+      rotation: { x: 0, y: 45, z: 0 },
+      scale: { x: 1.5, y: 1.5, z: 1 },
+      content: {
+        type: "collaboration_space",
+        participants: [],
+        tools: ["白板", "便签", "投票", "讨论"],
+      },
+      interactive: true,
+      visible: true,
+      anchored: true,
+      metadata: { panelType: "collaboration" },
+    })
+
+    if (this.xrSession) {
+      this.xrSession.elements.push(collabPanel)
+    }
+  }
+
+  private static showElementFeedback(element: SpatialElement, type: "click" | "highlight" | "error"): void {
+    console.log(`显示元素反馈: ${element.id}, 类型: ${type}`)
+  }
+
+  static registerGestureHandler(gestureType: string, handler: (event: GestureEvent) => void): void {
+    this.gestureHandlers.set(gestureType, handler)
+  }
+
+  static unregisterGestureHandler(gestureType: string): void {
+    this.gestureHandlers.delete(gestureType)
+  }
+
+  static updateUserPosition(position: { x: number; y: number; z: number }): void {
+    if (this.xrSession) {
+      this.xrSession.userPosition = position
+      this.adjustUIForUserPosition(position)
+    }
+  }
+
+  private static adjustUIForUserPosition(position: { x: number; y: number; z: number }): void {
+    for (const element of this.spatialElements.values()) {
+      if (element.anchored) continue
+
+      const distance = Math.sqrt(
+        Math.pow(element.position.x - position.x, 2) +
+        Math.pow(element.position.z - position.z, 2)
+      )
+
+      if (distance > 5) {
+        const direction = {
+          x: (element.position.x - position.x) / distance,
+          z: (element.position.z - position.z) / distance,
+        }
+
+        this.updateSpatialElement(element.id, {
+          position: {
+            x: position.x + direction.x * 3,
+            y: element.position.y,
+            z: position.z + direction.z * 3,
+          },
+        })
+      }
+    }
+  }
+
+  static endSession(): boolean {
+    if (!this.xrSession) return false
+
+    this.xrSession.isActive = false
+    this.xrSession.status = "ended"
+    this.xrSession.duration = Date.now() - this.xrSession.startTime.getTime()
+
+    console.log(`XR会话已结束: ${this.xrSession.id}, 持续时间: ${this.xrSession.duration}ms`)
+
     this.spatialElements.clear()
+    this.gestureHandlers.clear()
+    this.xrSession = null
 
-    // 停止识别器
-    if (this.gestureRecognizer) {
-      this.gestureRecognizer.stop?.()
-    }
-    if (this.voiceRecognizer) {
-      this.voiceRecognizer.stop?.()
-    }
+    return true
   }
 
-  getSession(): XRSession | null {
-    return this.currentSession
+  static getSession(): XRSession | null {
+    return this.xrSession
   }
 
-  getSpatialElements(): SpatialUI[] {
+  static isSupported(): boolean {
+    return this.isXRSupported
+  }
+
+  static getCurrentDevice(): XRDevice | null {
+    return this.currentDevice
+  }
+
+  static getSpatialElements(): SpatialElement[] {
     return Array.from(this.spatialElements.values())
   }
 
-  on(event: string, callback: Function): void {
-    if (!this.eventListeners.has(event)) {
-      this.eventListeners.set(event, [])
-    }
-    this.eventListeners.get(event)!.push(callback)
-  }
+  static getSessionStats(): {
+    duration: number
+    interactions: number
+    elementsCreated: number
+    gesturesProcessed: number
+  } | null {
+    if (!this.xrSession) return null
 
-  off(event: string, callback: Function): void {
-    const listeners = this.eventListeners.get(event)
-    if (listeners) {
-      const index = listeners.indexOf(callback)
-      if (index > -1) {
-        listeners.splice(index, 1)
-      }
-    }
-  }
-
-  private async initializeGestureRecognition(): Promise<void> {
-    // 这里应该初始化手势识别库，比如MediaPipe或TensorFlow.js
-    console.log("初始化手势识别...")
-
-    // 模拟手势识别器初始化
-    this.gestureRecognizer = {
-      start: () => console.log("手势识别已启动"),
-      stop: () => console.log("手势识别已停止"),
-      isActive: true,
-    }
-  }
-
-  private async initializeVoiceRecognition(): Promise<void> {
-    console.log("初始化语音识别...")
-
-    try {
-      // 检查浏览器支持
-      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-
-      if (SpeechRecognition) {
-        this.voiceRecognizer = new SpeechRecognition()
-        this.voiceRecognizer.continuous = true
-        this.voiceRecognizer.interimResults = true
-        this.voiceRecognizer.lang = "zh-CN"
-      }
-    } catch (error) {
-      console.error("语音识别初始化失败:", error)
-    }
-  }
-
-  private classifyGesture(gestureData: any): SpatialGesture["type"] {
-    // 简化的手势分类逻辑
-    // 实际应用中应该使用机器学习模型
-
-    if (gestureData.fingers?.pinched) return "pinch"
-    if (gestureData.fingers?.extended === 1) return "point"
-    if (gestureData.movement?.speed > 0.5) return "swipe"
-    if (gestureData.fingers?.closed) return "grab"
-
-    return "tap"
-  }
-
-  private async handleGestureCommand(gesture: SpatialGesture): Promise<void> {
-    switch (gesture.type) {
-      case "pinch":
-        // 处理捏合手势，可能是选择或缩放
-        this.emit("gesture-pinch", gesture)
-        break
-      case "point":
-        // 处理指向手势，可能是选择UI元素
-        this.emit("gesture-point", gesture)
-        break
-      case "swipe":
-        // 处理滑动手势，可能是导航
-        this.emit("gesture-swipe", gesture)
-        break
-      case "grab":
-        // 处理抓取手势，可能是移动对象
-        this.emit("gesture-grab", gesture)
-        break
-    }
-  }
-
-  private async handleVoiceCommand(command: VoiceCommand): Promise<void> {
-    const { command: text, parameters } = command
-
-    // 简单的语音命令处理
-    if (text.includes("搜索") || text.includes("查找")) {
-      this.emit("voice-search", { query: parameters.query || text })
-    } else if (text.includes("创建") || text.includes("生成")) {
-      this.emit("voice-create", { type: parameters.type || "general" })
-    } else if (text.includes("关闭") || text.includes("退出")) {
-      this.emit("voice-close", {})
-    } else if (text.includes("帮助")) {
-      this.emit("voice-help", {})
-    }
-  }
-
-  private parseVoiceParameters(transcript: string): Record<string, any> {
-    const parameters: Record<string, any> = {}
-
-    // 简单的参数提取逻辑
-    if (transcript.includes("搜索")) {
-      const match = transcript.match(/搜索(.+)/)
-      if (match) parameters.query = match[1].trim()
-    }
-
-    if (transcript.includes("创建")) {
-      if (transcript.includes("思维导图")) parameters.type = "mindmap"
-      else if (transcript.includes("海报")) parameters.type = "poster"
-      else if (transcript.includes("PPT")) parameters.type = "presentation"
-    }
-
-    return parameters
-  }
-
-  private getVisualizationAnimations(type: string): any {
-    switch (type) {
-      case "chart":
-        return {
-          entrance: "fadeInUp",
-          hover: "pulse",
-          selection: "highlight",
-        }
-      case "model":
-        return {
-          entrance: "rotateIn",
-          idle: "slowRotate",
-          interaction: "bounce",
-        }
-      case "network":
-        return {
-          entrance: "expandFromCenter",
-          connections: "flowingLines",
-          nodes: "breathe",
-        }
-      case "mindmap":
-        return {
-          entrance: "branchGrowth",
-          expansion: "smoothBranching",
-          focus: "zoomHighlight",
-        }
-      default:
-        return {
-          entrance: "fadeIn",
-          hover: "scale",
-          selection: "glow",
-        }
-    }
-  }
-
-  private emit(event: string, data?: any): void {
-    const listeners = this.eventListeners.get(event)
-    if (listeners) {
-      listeners.forEach((callback) => callback(data))
+    return {
+      duration: this.xrSession.isActive 
+        ? Date.now() - this.xrSession.startTime.getTime()
+        : this.xrSession.duration,
+      interactions: this.xrSession.interactions.length,
+      elementsCreated: this.xrSession.elements.length,
+      gesturesProcessed: this.xrSession.interactions.filter(i => 
+        ["tap", "pinch", "swipe", "grab", "point"].includes(i.type)
+      ).length,
     }
   }
 }
 
-// 全局实例
-export const arvrInterface = ARVRInterfaceManager.getInstance()
+export const arvrInterface = ARVRInterfaceManager

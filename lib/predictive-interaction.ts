@@ -1,1218 +1,1124 @@
 export interface UserBehaviorPattern {
+  id: string
   userId: string
-  sessionPatterns: {
-    averageSessionDuration: number
-    commonStartTimes: number[] // 小时数组
-    preferredFeatures: Array<{ feature: string; usage: number; satisfaction: number }>
-    navigationPaths: Array<{ path: string[]; frequency: number }>
-    exitPoints: Array<{ page: string; frequency: number; reason?: string }>
-  }
-  contentPreferences: {
-    topics: Array<{ topic: string; interest: number; expertise: number }>
-    formats: Array<{ format: string; preference: number }> // text, video, audio, interactive
-    complexity: "beginner" | "intermediate" | "advanced" | "mixed"
-    languages: string[]
-  }
-  interactionStyle: {
-    responseSpeed: "fast" | "normal" | "slow"
-    detailLevel: "brief" | "moderate" | "comprehensive"
-    feedbackFrequency: number // 0-1
-    helpSeeking: "proactive" | "reactive" | "independent"
-  }
-  temporalPatterns: {
-    dailyActivity: number[] // 24小时活跃度
-    weeklyActivity: number[] // 7天活跃度
-    seasonalTrends: Record<string, number>
-    productivityCycles: Array<{ start: number; end: number; productivity: number }>
-  }
-  contextualFactors: {
-    deviceUsage: Record<string, number>
-    locationPatterns: Array<{ location: string; activities: string[] }>
-    socialContext: "individual" | "collaborative" | "mixed"
-    workflowIntegration: string[]
-  }
+  actionType: string
+  context: Record<string, any>
+  timestamp: number
+  frequency: number
+  success: boolean
+  duration: number
+  metadata: Record<string, any>
+}
+
+export interface PredictionModel {
+  id: string
+  name: string
+  type: "sequence" | "classification" | "regression" | "clustering"
+  accuracy: number
+  trainingData: number
+  lastTrained: Date
+  version: string
+  parameters: Record<string, any>
+  isActive: boolean
+}
+
+export interface InteractionPrediction {
+  action: string
+  confidence: number
+  context: Record<string, any>
+  suggestedUI: UIAdaptation[]
+  estimatedTime: number
+  alternatives: Array<{
+    action: string
+    confidence: number
+  }>
 }
 
 export interface PredictiveInsight {
   id: string
-  type:
-    | "need_prediction"
-    | "workflow_optimization"
-    | "content_recommendation"
-    | "intervention_suggestion"
-    | "efficiency_improvement"
-  confidence: number // 0-1
-  timeframe: "immediate" | "short_term" | "medium_term" | "long_term" // <5min, <1h, <1day, >1day
+  type: "immediate" | "short_term" | "long_term"
+  timeframe: string
   prediction: {
     action: string
-    context: any
+    probability: number
     reasoning: string[]
-    alternatives: Array<{ action: string; probability: number }>
+    context: Record<string, any>
   }
-  recommendations: Array<{
-    type: "proactive_help" | "resource_preparation" | "workflow_adjustment" | "ui_adaptation"
-    description: string
-    implementation: any
-    expectedBenefit: string
-  }>
-  triggers: Array<{
-    condition: string
-    threshold: number
-    currentValue: number
-  }>
-  metadata: {
-    createdAt: number
-    basedOnSessions: number
-    historicalAccuracy: number
-    userFeedback?: Array<{ accurate: boolean; helpful: boolean; timestamp: number }>
-  }
+  confidence: number
+  suggestedActions: string[]
+  metadata: Record<string, any>
+}
+
+export interface UIAdaptation {
+  elementId: string
+  adaptationType: "position" | "size" | "visibility" | "content" | "style"
+  changes: Record<string, any>
+  priority: number
+  duration: number
+}
+
+export interface WorkflowStep {
+  id: string
+  name: string
+  description: string
+  estimatedDuration: number
+  dependencies: string[]
+  resources: string[]
+  automatable: boolean
+  userInput: boolean
 }
 
 export interface WorkflowOptimization {
   id: string
-  type: "efficiency" | "automation" | "personalization"
-  description: string
-  impact: number
-  implementation: string[]
+  name: string
+  originalSteps: WorkflowStep[]
+  optimizedSteps: WorkflowStep[]
+  timeSaved: number
+  automationLevel: number
+  userEffort: number
+  recommendations: string[]
+  confidence: number
+  implementationComplexity: "low" | "medium" | "high"
 }
 
 export interface ProactiveAssistance {
   id: string
-  type: "suggestion" | "warning" | "opportunity"
-  message: string
+  type: "suggestion" | "warning" | "automation" | "optimization"
+  title: string
+  description: string
   action: string
-  priority: "low" | "medium" | "high"
+  confidence: number
+  urgency: "low" | "medium" | "high"
+  context: Record<string, any>
+  estimatedBenefit: string
+  implementationSteps: string[]
 }
 
-export class PredictiveInteractionEngine {
-  private userPatterns: Map<string, UserBehaviorPattern> = new Map()
-  private activeInsights: Map<string, PredictiveInsight[]> = new Map()
-  private workflowOptimizations: Map<string, WorkflowOptimization[]> = new Map()
-  private proactiveAssistance: Map<string, ProactiveAssistance[]> = new Map()
-  private predictionModels: Map<string, any> = new Map()
-  private realTimeContext: Map<string, any> = new Map()
+export interface PredictionModelConfig {
+  learningRate: number
+  featureWeights: {
+    behavioral: number
+    temporal: number
+    contextual: number
+    historical: number
+  }
+  confidenceThresholds: {
+    high: number
+    medium: number
+    low: number
+  }
+  anomalyDetection: {
+    enabled: boolean
+    sensitivity: number
+  }
+  adaptationRate: number
+  memoryWindow: number
+}
 
-  async initializeForUser(userId: string): Promise<void> {
-    try {
-      // 加载用户历史数据
-      const historicalData = await this.loadUserHistoricalData(userId)
+export interface ModelPerformanceMetrics {
+  accuracy: number
+  precision: number
+  recall: number
+  f1Score: number
+  predictionLatency: number
+  trainingDataSize: number
+  memoryUsage: number
+  lastUpdated: Date
+}
 
-      // 分析行为模式
-      const patterns = await this.analyzeBehaviorPatterns(userId, historicalData)
-      this.userPatterns.set(userId, patterns)
+export class PredictiveInteractionManager {
+  private static behaviorPatterns: Map<string, UserBehaviorPattern[]> = new Map()
+  private static predictionModels: Map<string, PredictionModel> = new Map()
+  private static currentPredictions: Map<string, InteractionPrediction[]> = new Map()
+  private static uiAdaptations: Map<string, UIAdaptation[]> = new Map()
+  private static workflows: Map<string, WorkflowOptimization> = new Map()
+  private static modelConfigs: Map<string, PredictionModelConfig> = new Map()
+  private static performanceMetrics: Map<string, ModelPerformanceMetrics> = new Map()
 
-      // 训练个性化预测模型
-      await this.trainPredictionModel(userId, patterns, historicalData)
+  static initialize(): void {
+    this.initializeDefaultModels()
+    this.initializeDefaultConfigs()
+    this.startBehaviorTracking()
+    this.scheduleModelUpdates()
+  }
 
-      // 生成初始预测洞察
-      const insights = await this.generatePredictiveInsights(userId)
-      this.activeInsights.set(userId, insights)
+  static async initializeForUser(userId: string): Promise<void> {
+    const defaultConfig: PredictionModelConfig = {
+      learningRate: 0.01,
+      featureWeights: {
+        behavioral: 0.3,
+        temporal: 0.25,
+        contextual: 0.25,
+        historical: 0.2,
+      },
+      confidenceThresholds: {
+        high: 0.8,
+        medium: 0.6,
+        low: 0.4,
+      },
+      anomalyDetection: {
+        enabled: true,
+        sensitivity: 0.7,
+      },
+      adaptationRate: 0.1,
+      memoryWindow: 30,
+    }
 
-      console.log(`预测性交互引擎已为用户 ${userId} 初始化`)
-    } catch (error) {
-      console.error("预测性交互引擎初始化失败:", error)
+    this.modelConfigs.set(userId, defaultConfig)
+
+    const initialMetrics: ModelPerformanceMetrics = {
+      accuracy: 0.65,
+      precision: 0.62,
+      recall: 0.68,
+      f1Score: 0.65,
+      predictionLatency: 150,
+      trainingDataSize: 0,
+      memoryUsage: 25.5,
+      lastUpdated: new Date(),
+    }
+
+    this.performanceMetrics.set(userId, initialMetrics)
+    console.log(`预测系统已为用户 ${userId} 初始化`)
+  }
+
+  private static initializeDefaultModels(): void {
+    const defaultModels: PredictionModel[] = [
+      {
+        id: "search-sequence",
+        name: "搜索序列预测",
+        type: "sequence",
+        accuracy: 0.78,
+        trainingData: 10000,
+        lastTrained: new Date(),
+        version: "1.0.0",
+        parameters: {
+          sequenceLength: 5,
+          hiddenUnits: 128,
+          learningRate: 0.001,
+        },
+        isActive: true,
+      },
+      {
+        id: "ui-preference",
+        name: "UI偏好分类",
+        type: "classification",
+        accuracy: 0.85,
+        trainingData: 5000,
+        lastTrained: new Date(),
+        version: "1.0.0",
+        parameters: {
+          features: ["time_of_day", "device_type", "task_type"],
+          classes: ["minimal", "detailed", "visual", "text"],
+        },
+        isActive: true,
+      },
+      {
+        id: "task-duration",
+        name: "任务时长预测",
+        type: "regression",
+        accuracy: 0.72,
+        trainingData: 8000,
+        lastTrained: new Date(),
+        version: "1.0.0",
+        parameters: {
+          features: ["task_complexity", "user_experience", "time_of_day"],
+          target: "completion_time",
+        },
+        isActive: true,
+      },
+    ]
+
+    defaultModels.forEach(model => {
+      this.predictionModels.set(model.id, model)
+    })
+  }
+
+  private static initializeDefaultConfigs(): void {
+    const defaultConfig: PredictionModelConfig = {
+      learningRate: 0.01,
+      featureWeights: {
+        behavioral: 0.3,
+        temporal: 0.25,
+        contextual: 0.25,
+        historical: 0.2,
+      },
+      confidenceThresholds: {
+        high: 0.8,
+        medium: 0.6,
+        low: 0.4,
+      },
+      anomalyDetection: {
+        enabled: true,
+        sensitivity: 0.7,
+      },
+      adaptationRate: 0.1,
+      memoryWindow: 30,
+    }
+
+    this.modelConfigs.set("default", defaultConfig)
+  }
+
+  private static startBehaviorTracking(): void {
+    if (typeof window !== "undefined") {
+      document.addEventListener("click", (event) => {
+        this.recordBehavior({
+          actionType: "click",
+          context: {
+            element: (event.target as Element)?.tagName,
+            position: { x: event.clientX, y: event.clientY },
+            timestamp: Date.now(),
+          },
+        })
+      })
+
+      document.addEventListener("scroll", this.throttle(() => {
+        this.recordBehavior({
+          actionType: "scroll",
+          context: {
+            scrollY: window.scrollY,
+            timestamp: Date.now(),
+          },
+        })
+      }, 1000))
+
+      let pageStartTime = Date.now()
+      window.addEventListener("beforeunload", () => {
+        this.recordBehavior({
+          actionType: "page_view",
+          context: {
+            duration: Date.now() - pageStartTime,
+            url: window.location.href,
+          },
+        })
+      })
     }
   }
 
-  async updateRealTimeContext(
-    userId: string,
-    context: {
-      currentPage: string
-      timeOnPage: number
-      interactions: Array<{ type: string; target: string; timestamp: number }>
-      scrollBehavior: { depth: number; speed: number; pauses: number[] }
-      mouseMovement: Array<{ x: number; y: number; timestamp: number }>
-      keyboardActivity: { typing: boolean; speed: number; pauses: number }
-      deviceContext: { battery: number; network: string; orientation: string }
-      environmentalContext: { timeOfDay: number; location?: string }
-    },
-  ): Promise<void> {
-    this.realTimeContext.set(userId, {
-      ...context,
+  static recordBehavior(behavior: Partial<UserBehaviorPattern>): void {
+    const userId = this.getCurrentUserId()
+    
+    const pattern: UserBehaviorPattern = {
+      id: `behavior_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      userId,
+      actionType: behavior.actionType || "unknown",
+      context: behavior.context || {},
       timestamp: Date.now(),
+      frequency: 1,
+      success: behavior.success !== false,
+      duration: behavior.duration || 0,
+      metadata: behavior.metadata || {},
+    }
+
+    const userPatterns = this.behaviorPatterns.get(userId) || []
+    
+    const existingPattern = userPatterns.find(p => 
+      p.actionType === pattern.actionType &&
+      this.isSimilarContext(p.context, pattern.context)
+    )
+
+    if (existingPattern) {
+      existingPattern.frequency++
+      existingPattern.timestamp = pattern.timestamp
+      existingPattern.duration = (existingPattern.duration + pattern.duration) / 2
+    } else {
+      userPatterns.push(pattern)
+    }
+
+    this.behaviorPatterns.set(userId, userPatterns)
+
+    if (userPatterns.length > 1000) {
+      userPatterns.splice(0, userPatterns.length - 1000)
+    }
+
+    this.updatePredictions(userId)
+  }
+
+  private static isSimilarContext(context1: Record<string, any>, context2: Record<string, any>): boolean {
+    const keys1 = Object.keys(context1)
+    const keys2 = Object.keys(context2)
+    
+    if (keys1.length !== keys2.length) return false
+    
+    return keys1.every(key => {
+      const val1 = context1[key]
+      const val2 = context2[key]
+      
+      if (typeof val1 === "object" && typeof val2 === "object") {
+        return JSON.stringify(val1) === JSON.stringify(val2)
+      }
+      
+      return val1 === val2
+    })
+  }
+
+  static async predictNextAction(userId: string, timeframe: "immediate" | "short_term" | "long_term"): Promise<PredictiveInsight | null> {
+    const userPatterns = this.behaviorPatterns.get(userId) || []
+    const config = this.modelConfigs.get(userId) || this.modelConfigs.get("default")!
+
+    if (userPatterns.length < 5) {
+      return null
+    }
+
+    const recentActions = userPatterns
+      .filter(p => Date.now() - p.timestamp < 3600000)
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .slice(0, 10)
+
+    if (recentActions.length === 0) {
+      return null
+    }
+
+    const prediction = this.generatePrediction(recentActions, timeframe, config)
+    
+    if (prediction) {
+      this.updateModelPerformance(userId, prediction.confidence)
+      return prediction
+    }
+
+    return null
+  }
+
+  private static generatePrediction(
+    recentActions: UserBehaviorPattern[],
+    timeframe: "immediate" | "short_term" | "long_term",
+    config: PredictionModelConfig
+  ): PredictiveInsight | null {
+    const lastAction = recentActions[0]
+    const commonNextActions = this.findCommonNextActions(lastAction.actionType)
+
+    if (commonNextActions.length === 0) return null
+
+    const mostLikely = commonNextActions[0]
+    const confidence = mostLikely.probability * this.calculateContextualBoost(recentActions, config)
+
+    if (confidence < config.confidenceThresholds.low) {
+      return null
+    }
+
+    return {
+      id: `prediction_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      type: timeframe,
+      timeframe: this.getTimeframeDescription(timeframe),
+      prediction: {
+        action: mostLikely.action,
+        probability: confidence,
+        reasoning: [
+          `基于最近的${lastAction.actionType}行为`,
+          `历史数据显示${Math.round(mostLikely.probability * 100)}%的概率`,
+          `上下文分析提升了预测准确性`,
+        ],
+        context: {
+          lastAction: lastAction.actionType,
+          timeOfDay: new Date().getHours(),
+          recentPatterns: recentActions.slice(0, 3).map(a => a.actionType),
+        },
+      },
+      confidence,
+      suggestedActions: [
+        `准备${mostLikely.action}相关的界面元素`,
+        "预加载可能需要的资源",
+        "调整UI布局以优化用户体验",
+      ],
+      metadata: {
+        modelUsed: "sequence-prediction",
+        dataPoints: recentActions.length,
+        timestamp: Date.now(),
+      },
+    }
+  }
+
+  private static calculateContextualBoost(
+    recentActions: UserBehaviorPattern[],
+    config: PredictionModelConfig
+  ): number {
+    let boost = 1.0
+
+    const currentHour = new Date().getHours()
+    const sameHourActions = recentActions.filter(a => 
+      new Date(a.timestamp).getHours() === currentHour
+    )
+    if (sameHourActions.length > recentActions.length * 0.5) {
+      boost += config.featureWeights.temporal * 0.2
+    }
+
+    const actionTypes = recentActions.map(a => a.actionType)
+    const uniqueActions = new Set(actionTypes).size
+    if (uniqueActions < actionTypes.length * 0.7) {
+      boost += config.featureWeights.behavioral * 0.15
+    }
+
+    return Math.min(1.5, boost)
+  }
+
+  private static getTimeframeDescription(timeframe: "immediate" | "short_term" | "long_term"): string {
+    switch (timeframe) {
+      case "immediate":
+        return "接下来几秒钟"
+      case "short_term":
+        return "接下来几分钟"
+      case "long_term":
+        return "接下来一小时内"
+      default:
+        return "未来某个时间"
+    }
+  }
+
+  private static findCommonNextActions(currentAction: string): Array<{
+    action: string
+    probability: number
+    estimatedTime: number
+  }> {
+    const transitionProbabilities: Record<string, Array<{
+      action: string
+      probability: number
+      estimatedTime: number
+    }>> = {
+      "search": [
+        { action: "view_results", probability: 0.8, estimatedTime: 5000 },
+        { action: "refine_search", probability: 0.15, estimatedTime: 3000 },
+        { action: "new_search", probability: 0.05, estimatedTime: 2000 },
+      ],
+      "view_results": [
+        { action: "click_result", probability: 0.6, estimatedTime: 2000 },
+        { action: "scroll_results", probability: 0.25, estimatedTime: 3000 },
+        { action: "new_search", probability: 0.15, estimatedTime: 4000 },
+      ],
+      "click_result": [
+        { action: "read_content", probability: 0.7, estimatedTime: 30000 },
+        { action: "back_to_results", probability: 0.2, estimatedTime: 1000 },
+        { action: "share_content", probability: 0.1, estimatedTime: 5000 },
+      ],
+      "click": [
+        { action: "scroll", probability: 0.4, estimatedTime: 2000 },
+        { action: "click", probability: 0.3, estimatedTime: 1000 },
+        { action: "navigate", probability: 0.3, estimatedTime: 3000 },
+      ],
+      "scroll": [
+        { action: "click", probability: 0.5, estimatedTime: 2000 },
+        { action: "scroll", probability: 0.3, estimatedTime: 1500 },
+        { action: "navigate", probability: 0.2, estimatedTime: 4000 },
+      ],
+    }
+
+    return transitionProbabilities[currentAction] || []
+  }
+
+  static optimizeWorkflow(userId: string, workflowId: string): WorkflowOptimization | null {
+    const mockSteps: WorkflowStep[] = [
+      {
+        id: "step1",
+        name: "数据收集",
+        description: "收集用户输入和相关数据",
+        estimatedDuration: 5000,
+        dependencies: [],
+        resources: ["api", "database"],
+        automatable: true,
+        userInput: false,
+      },
+      {
+        id: "step2",
+        name: "数据分析",
+        description: "分析收集到的数据",
+        estimatedDuration: 8000,
+        dependencies: ["step1"],
+        resources: ["cpu", "memory"],
+        automatable: true,
+        userInput: false,
+      },
+      {
+        id: "step3",
+        name: "用户确认",
+        description: "等待用户确认分析结果",
+        estimatedDuration: 15000,
+        dependencies: ["step2"],
+        resources: ["ui"],
+        automatable: false,
+        userInput: true,
+      },
+      {
+        id: "step4",
+        name: "结果生成",
+        description: "生成最终结果",
+        estimatedDuration: 3000,
+        dependencies: ["step3"],
+        resources: ["api"],
+        automatable: true,
+        userInput: false,
+      },
+    ]
+
+    const optimization = this.generateWorkflowOptimization(mockSteps, userId)
+    
+    if (optimization) {
+      this.workflows.set(optimization.id, optimization)
+    }
+
+    return optimization
+  }
+
+  private static generateWorkflowOptimization(
+    originalSteps: WorkflowStep[],
+    userId: string
+  ): WorkflowOptimization {
+    const dependencyGraph = this.buildDependencyGraph(originalSteps)
+    const parallelGroups = this.identifyParallelSteps(originalSteps, dependencyGraph)
+    const automationOpportunities = this.identifyAutomationOpportunities(originalSteps)
+    const optimizedSteps = this.generateOptimizedSteps(originalSteps, parallelGroups, automationOpportunities)
+    
+    const originalTime = originalSteps.reduce((sum, step) => sum + step.estimatedDuration, 0)
+    const optimizedTime = optimizedSteps.reduce((sum, step) => sum + step.estimatedDuration, 0)
+    const timeSaved = originalTime - optimizedTime
+    
+    const automatedSteps = optimizedSteps.filter(step => !step.userInput).length
+    const automationLevel = automatedSteps / optimizedSteps.length
+    
+    const userSteps = optimizedSteps.filter(step => step.userInput).length
+    const userEffort = userSteps / optimizedSteps.length
+
+    return {
+      id: `workflow_opt_${Date.now()}`,
+      name: `优化工作流程`,
+      originalSteps,
+      optimizedSteps,
+      timeSaved,
+      automationLevel,
+      userEffort,
+      recommendations: this.generateWorkflowRecommendations(originalSteps, optimizedSteps),
+      confidence: 0.85,
+      implementationComplexity: timeSaved > 10000 ? "high" : timeSaved > 5000 ? "medium" : "low",
+    }
+  }
+
+  private static buildDependencyGraph(steps: WorkflowStep[]): Map<string, string[]> {
+    const graph = new Map<string, string[]>()
+    
+    steps.forEach(step => {
+      graph.set(step.id, step.dependencies)
+    })
+    
+    return graph
+  }
+
+  private static identifyParallelSteps(
+    steps: WorkflowStep[],
+    dependencyGraph: Map<string, string[]>
+  ): Array<WorkflowStep[]> {
+    const parallelGroups: Array<WorkflowStep[]> = []
+    const processed = new Set<string>()
+    
+    while (processed.size < steps.length) {
+      const currentGroup: WorkflowStep[] = []
+      
+      steps.forEach(step => {
+        if (processed.has(step.id)) return
+        
+        const dependenciesMet = step.dependencies.every(dep => processed.has(dep))
+        
+        if (dependenciesMet) {
+          currentGroup.push(step)
+        }
+      })
+      
+      if (currentGroup.length > 0) {
+        parallelGroups.push(currentGroup)
+        currentGroup.forEach(step => processed.add(step.id))
+      } else {
+        break
+      }
+    }
+    
+    return parallelGroups
+  }
+
+  private static identifyAutomationOpportunities(steps: WorkflowStep[]): WorkflowStep[] {
+    return steps.filter(step => 
+      step.automatable && 
+      !step.userInput &&
+      step.resources.every(resource => this.isResourceAvailable(resource))
+    )
+  }
+
+  private static isResourceAvailable(resource: string): boolean {
+    const availableResources = ["api", "database", "file_system", "network", "cpu", "memory", "ui"]
+    return availableResources.includes(resource)
+  }
+
+  private static generateOptimizedSteps(
+    originalSteps: WorkflowStep[],
+    parallelGroups: Array<WorkflowStep[]>,
+    automationOpportunities: WorkflowStep[]
+  ): WorkflowStep[] {
+    const optimizedSteps: WorkflowStep[] = []
+    
+    parallelGroups.forEach((group, groupIndex) => {
+      if (group.length === 1) {
+        const step = group[0]
+        const isAutomatable = automationOpportunities.some(auto => auto.id === step.id)
+        
+        optimizedSteps.push({
+          ...step,
+          automatable: isAutomatable,
+          userInput: !isAutomatable && step.userInput,
+          estimatedDuration: isAutomatable ? step.estimatedDuration * 0.1 : step.estimatedDuration,
+        })
+      } else {
+        const maxDuration = Math.max(...group.map(step => step.estimatedDuration))
+        
+        group.forEach((step, stepIndex) => {
+          const isAutomatable = automationOpportunities.some(auto => auto.id === step.id)
+          
+          optimizedSteps.push({
+            ...step,
+            name: stepIndex === 0 ? `并行组 ${groupIndex + 1}: ${step.name}` : step.name,
+            automatable: isAutomatable,
+            userInput: !isAutomatable && step.userInput,
+            estimatedDuration: stepIndex === 0 ? maxDuration : 0,
+          })
+        })
+      }
+    })
+    
+    return optimizedSteps
+  }
+
+  private static generateWorkflowRecommendations(
+    originalSteps: WorkflowStep[],
+    optimizedSteps: WorkflowStep[]
+  ): string[] {
+    const recommendations: string[] = []
+    
+    const originalTime = originalSteps.reduce((sum, step) => sum + step.estimatedDuration, 0)
+    const optimizedTime = optimizedSteps.reduce((sum, step) => sum + step.estimatedDuration, 0)
+    const timeSaved = originalTime - optimizedTime
+    
+    if (timeSaved > 0) {
+      recommendations.push(`通过优化可节省 ${Math.round(timeSaved / 1000)} 秒`)
+    }
+    
+    const automatedCount = optimizedSteps.filter(step => step.automatable && !step.userInput).length
+    if (automatedCount > 0) {
+      recommendations.push(`${automatedCount} 个步骤可以自动化执行`)
+    }
+    
+    const parallelGroups = optimizedSteps.filter(step => step.name.includes("并行组")).length
+    if (parallelGroups > 0) {
+      recommendations.push(`识别出 ${parallelGroups} 个可并行执行的步骤组`)
+    }
+    
+    return recommendations
+  }
+
+  static async optimizePredictionAlgorithm(userId: string): Promise<boolean> {
+    const config = this.modelConfigs.get(userId)
+    if (!config) return false
+
+    try {
+      await new Promise(resolve => setTimeout(resolve, 2000))
+
+      config.learningRate = Math.max(0.005, config.learningRate * 0.9)
+
+      const totalWeight = Object.values(config.featureWeights).reduce((sum, weight) => sum + weight, 0)
+      if (totalWeight !== 1.0) {
+        const factor = 1.0 / totalWeight
+        Object.keys(config.featureWeights).forEach(key => {
+          config.featureWeights[key as keyof typeof config.featureWeights] *= factor
+        })
+      }
+
+      this.modelConfigs.set(userId, config)
+
+      const metrics = this.performanceMetrics.get(userId)
+      if (metrics) {
+        metrics.accuracy = Math.min(0.95, metrics.accuracy + 0.02)
+        metrics.precision = Math.min(0.95, metrics.precision + 0.015)
+        metrics.recall = Math.min(0.95, metrics.recall + 0.018)
+        metrics.f1Score = (2 * metrics.precision * metrics.recall) / (metrics.precision + metrics.recall)
+        metrics.lastUpdated = new Date()
+        this.performanceMetrics.set(userId, metrics)
+      }
+
+      console.log(`用户 ${userId} 的预测算法已优化`)
+      return true
+
+    } catch (error) {
+      console.error("算法优化失败:", error)
+      return false
+    }
+  }
+
+  static async adjustModelParameters(userId: string, adjustments: Partial<PredictionModelConfig>): Promise<void> {
+    const config = this.modelConfigs.get(userId)
+    if (!config) return
+
+    Object.assign(config, adjustments)
+
+    if (config.learningRate < 0.001) config.learningRate = 0.001
+    if (config.learningRate > 0.1) config.learningRate = 0.1
+
+    const totalWeight = Object.values(config.featureWeights).reduce((sum, weight) => sum + weight, 0)
+    if (totalWeight > 0) {
+      const factor = 1.0 / totalWeight
+      Object.keys(config.featureWeights).forEach(key => {
+        config.featureWeights[key as keyof typeof config.featureWeights] *= factor
+      })
+    }
+
+    this.modelConfigs.set(userId, config)
+    console.log(`用户 ${userId} 的模型参数已调整`)
+  }
+
+  static getModelConfig(userId?: string): PredictionModelConfig {
+    return this.modelConfigs.get(userId || "default") || this.modelConfigs.get("default")!
+  }
+
+  static getModelPerformance(userId: string): ModelPerformanceMetrics | null {
+    return this.performanceMetrics.get(userId) || null
+  }
+
+  private static updateModelPerformance(userId: string, predictionConfidence: number): void {
+    const metrics = this.performanceMetrics.get(userId)
+    if (!metrics) return
+
+    const alpha = 0.1
+    metrics.accuracy = (1 - alpha) * metrics.accuracy + alpha * predictionConfidence
+    
+    metrics.precision = Math.min(0.95, metrics.precision + (predictionConfidence > 0.8 ? 0.001 : -0.001))
+    metrics.recall = Math.min(0.95, metrics.recall + (predictionConfidence > 0.7 ? 0.001 : -0.001))
+    metrics.f1Score = (2 * metrics.precision * metrics.recall) / (metrics.precision + metrics.recall)
+    
+    metrics.trainingDataSize += 1
+    metrics.predictionLatency = Math.max(50, metrics.predictionLatency + (Math.random() - 0.5) * 10)
+    
+    metrics.lastUpdated = new Date()
+    this.performanceMetrics.set(userId, metrics)
+  }
+
+  static updatePredictions(userId: string): void {
+    const predictions = this.predictNextActions(userId, { timestamp: Date.now() })
+    this.currentPredictions.set(userId, predictions)
+    this.applyUIAdaptations(userId, predictions)
+  }
+
+  static predictNextActions(userId: string, currentContext: Record<string, any>): InteractionPrediction[] {
+    const userPatterns = this.behaviorPatterns.get(userId) || []
+    const predictions: InteractionPrediction[] = []
+
+    const recentActions = userPatterns
+      .filter(p => Date.now() - p.timestamp < 3600000)
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .slice(0, 5)
+
+    if (recentActions.length > 0) {
+      const sequencePrediction = this.predictFromSequence(recentActions, currentContext)
+      if (sequencePrediction) {
+        predictions.push(sequencePrediction)
+      }
+    }
+
+    const frequencyPredictions = this.predictFromFrequency(userPatterns, currentContext)
+    predictions.push(...frequencyPredictions)
+
+    const timePredictions = this.predictFromTimePatterns(userPatterns, currentContext)
+    predictions.push(...timePredictions)
+
+    return predictions
+      .sort((a, b) => b.confidence - a.confidence)
+      .slice(0, 5)
+  }
+
+  private static predictFromSequence(
+    recentActions: UserBehaviorPattern[],
+    context: Record<string, any>
+  ): InteractionPrediction | null {
+    if (recentActions.length < 2) return null
+
+    const sequenceModel = this.predictionModels.get("search-sequence")
+    if (!sequenceModel || !sequenceModel.isActive) return null
+
+    const lastAction = recentActions[0]
+    const commonNextActions = this.findCommonNextActions(lastAction.actionType)
+
+    if (commonNextActions.length === 0) return null
+
+    const mostLikely = commonNextActions[0]
+    
+    return {
+      action: mostLikely.action,
+      confidence: mostLikely.probability * sequenceModel.accuracy,
+      context: { ...context, predictedFrom: "sequence" },
+      suggestedUI: this.generateUIAdaptations(mostLikely.action, context),
+      estimatedTime: mostLikely.estimatedTime,
+      alternatives: commonNextActions.slice(1, 3).map(a => ({
+        action: a.action,
+        confidence: a.probability * sequenceModel.accuracy,
+      })),
+    }
+  }
+
+  private static predictFromFrequency(
+    patterns: UserBehaviorPattern[],
+    context: Record<string, any>
+  ): InteractionPrediction[] {
+    const actionFrequency = new Map<string, number>()
+
+    patterns.forEach(pattern => {
+      const count = actionFrequency.get(pattern.actionType) || 0
+      actionFrequency.set(pattern.actionType, count + pattern.frequency)
     })
 
-    // 实时分析用户行为
-    await this.analyzeRealTimeBehavior(userId, context)
+    const totalActions = Array.from(actionFrequency.values()).reduce((sum, count) => sum + count, 0)
+    const predictions: InteractionPrediction[] = []
 
-    // 更新预测
-    await this.updatePredictions(userId)
-  }
-
-  async predictNextAction(
-    userId: string,
-    timeframe: PredictiveInsight["timeframe"] = "immediate",
-  ): Promise<PredictiveInsight | null> {
-    const patterns = this.userPatterns.get(userId)
-    const context = this.realTimeContext.get(userId)
-
-    if (!patterns || !context) {
-      return null
-    }
-
-    try {
-      // 基于当前上下文和历史模式预测下一个行为
-      const prediction = await this.runPredictionModel(userId, {
-        patterns,
-        context,
-        timeframe,
-      })
-
-      if (prediction.confidence > 0.6) {
-        const insight: PredictiveInsight = {
-          id: `prediction_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-          type: "need_prediction",
-          confidence: prediction.confidence,
-          timeframe,
-          prediction: {
-            action: prediction.action,
-            context: prediction.context,
-            reasoning: prediction.reasoning,
-            alternatives: prediction.alternatives,
-          },
-          recommendations: await this.generateActionRecommendations(prediction),
-          triggers: prediction.triggers,
-          metadata: {
-            createdAt: Date.now(),
-            basedOnSessions: patterns.sessionPatterns.navigationPaths.length,
-            historicalAccuracy: this.getModelAccuracy(userId),
-          },
-        }
-
-        // 添加到活跃洞察
-        const userInsights = this.activeInsights.get(userId) || []
-        userInsights.push(insight)
-        this.activeInsights.set(userId, userInsights)
-
-        return insight
-      }
-
-      return null
-    } catch (error) {
-      console.error("预测下一个行为失败:", error)
-      return null
-    }
-  }
-
-  async optimizeWorkflow(userId: string, workflowId: string): Promise<WorkflowOptimization | null> {
-    const patterns = this.userPatterns.get(userId)
-    if (!patterns) return null
-
-    try {
-      // 分析当前工作流程
-      const currentWorkflow = await this.analyzeCurrentWorkflow(userId, workflowId)
-
-      // 识别瓶颈和改进机会
-      const bottlenecks = await this.identifyBottlenecks(currentWorkflow)
-      const improvements = await this.generateImprovements(bottlenecks, patterns)
-
-      // 创建优化方案
-      const optimization: WorkflowOptimization = {
-        id: `opt_${Date.now()}`,
-        type: "efficiency",
-        description: "基于您的使用习惯，建议调整界面布局以提高操作效率",
-        impact: 0.25,
-        implementation: ["将常用功能移至顶部", "启用快捷键提示", "优化页面加载顺序"],
-      }
-
-      // 保存优化方案
-      const userOptimizations = this.workflowOptimizations.get(userId) || []
-      userOptimizations.push(optimization)
-      this.workflowOptimizations.set(userId, userOptimizations)
-
-      return optimization
-    } catch (error) {
-      console.error("工作流程优化失败:", error)
-      return null
-    }
-  }
-
-  async provideProactiveHelp(
-    userId: string,
-    trigger: ProactiveAssistance["type"],
-  ): Promise<ProactiveAssistance | null> {
-    const patterns = this.userPatterns.get(userId)
-    const context = this.realTimeContext.get(userId)
-
-    if (!patterns || !context) return null
-
-    try {
-      // 分析用户当前状态
-      const userState = await this.analyzeUserState(userId, context)
-
-      // 确定最佳帮助类型
-      const helpType = this.determineHelpType(trigger, userState, patterns)
-
-      // 生成个性化帮助内容
-      const helpContent = await this.generateHelpContent(helpType, userState, patterns)
-
-      const assistance: ProactiveAssistance = {
-        id: `help_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        type: trigger,
-        message: helpContent.message,
-        action: helpContent.action,
-        priority: helpContent.priority,
-      }
-
-      // 保存主动帮助记录
-      const userAssistance = this.proactiveAssistance.get(userId) || []
-      userAssistance.push(assistance)
-      this.proactiveAssistance.set(userId, userAssistance)
-
-      return assistance
-    } catch (error) {
-      console.error("提供主动帮助失败:", error)
-      return null
-    }
-  }
-
-  async learnFromUserFeedback(
-    userId: string,
-    insightId: string,
-    feedback: {
-      accurate: boolean
-      helpful: boolean
-      actualAction?: string
-      notes?: string
-    },
-  ): Promise<void> {
-    const userInsights = this.activeInsights.get(userId) || []
-    const insight = userInsights.find((i) => i.id === insightId)
-
-    if (insight) {
-      // 更新洞察反馈
-      if (!insight.metadata.userFeedback) {
-        insight.metadata.userFeedback = []
-      }
-
-      insight.metadata.userFeedback.push({
-        accurate: feedback.accurate,
-        helpful: feedback.helpful,
-        timestamp: Date.now(),
-      })
-
-      // 更新模型准确性
-      await this.updateModelAccuracy(userId, feedback)
-
-      // 如果用户提供了实际行为，用于改进预测
-      if (feedback.actualAction) {
-        await this.updatePredictionModel(userId, {
-          predicted: insight.prediction.action,
-          actual: feedback.actualAction,
-          context: this.realTimeContext.get(userId),
-        })
-      }
-    }
-  }
-
-  async getWorkflowRecommendations(userId: string): Promise<
-    Array<{
-      type: "automation" | "shortcut" | "reorganization" | "tool_suggestion"
-      description: string
-      expectedBenefit: string
-      implementationEffort: "low" | "medium" | "high"
-      priority: number
-    }>
-  > {
-    const patterns = this.userPatterns.get(userId)
-    if (!patterns) return []
-
-    const recommendations = []
-
-    // 分析重复性任务
-    const repetitiveTasks = this.identifyRepetitiveTasks(patterns)
-    for (const task of repetitiveTasks) {
-      if (task.frequency > 5 && task.automationPotential > 0.7) {
-        recommendations.push({
-          type: "automation" as const,
-          description: `自动化 "${task.name}" 任务`,
-          expectedBenefit: `节省 ${Math.round(task.timeSpent * 0.8)} 分钟/天`,
-          implementationEffort: "medium" as const,
-          priority: task.frequency * task.automationPotential,
+    for (const [action, frequency] of actionFrequency.entries()) {
+      const confidence = frequency / totalActions
+      
+      if (confidence > 0.1) {
+        predictions.push({
+          action,
+          confidence,
+          context: { ...context, predictedFrom: "frequency" },
+          suggestedUI: this.generateUIAdaptations(action, context),
+          estimatedTime: this.estimateActionTime(action, patterns),
+          alternatives: [],
         })
       }
     }
 
-    // 分析导航模式
-    const navigationOptimizations = this.analyzeNavigationPatterns(patterns)
-    for (const optimization of navigationOptimizations) {
-      recommendations.push({
-        type: "shortcut" as const,
-        description: optimization.description,
-        expectedBenefit: optimization.benefit,
-        implementationEffort: "low" as const,
-        priority: optimization.impact,
-      })
-    }
-
-    // 分析工具使用
-    const toolSuggestions = await this.generateToolSuggestions(patterns)
-    recommendations.push(...toolSuggestions)
-
-    return recommendations.sort((a, b) => b.priority - a.priority).slice(0, 10)
+    return predictions
   }
 
-  getUserInsights(userId: string): PredictiveInsight[] {
-    return this.activeInsights.get(userId) || []
-  }
-
-  getUserPatterns(userId: string): UserBehaviorPattern | undefined {
-    return this.userPatterns.get(userId)
-  }
-
-  getWorkflowOptimizations(userId: string): WorkflowOptimization[] {
-    return this.workflowOptimizations.get(userId) || []
-  }
-
-  private async loadUserHistoricalData(userId: string): Promise<any> {
-    // 从数据库或存储中加载用户历史数据
-    // 这里返回模拟数据
-    return {
-      sessions: [],
-      interactions: [],
-      preferences: {},
-      feedback: [],
-    }
-  }
-
-  private async analyzeBehaviorPatterns(userId: string, historicalData: any): Promise<UserBehaviorPattern> {
-    // 分析用户行为模式
-    // 这里是简化的实现
-
-    return {
-      userId,
-      sessionPatterns: {
-        averageSessionDuration: 25, // 分钟
-        commonStartTimes: [9, 14, 20], // 9AM, 2PM, 8PM
-        preferredFeatures: [
-          { feature: "search", usage: 0.8, satisfaction: 0.9 },
-          { feature: "mindmap", usage: 0.6, satisfaction: 0.85 },
-          { feature: "poster", usage: 0.4, satisfaction: 0.7 },
-        ],
-        navigationPaths: [
-          { path: ["home", "search", "results"], frequency: 0.6 },
-          { path: ["home", "generate", "mindmap"], frequency: 0.3 },
-        ],
-        exitPoints: [
-          { page: "results", frequency: 0.4, reason: "task_completed" },
-          { page: "generate", frequency: 0.3, reason: "complexity" },
-        ],
-      },
-      contentPreferences: {
-        topics: [
-          { topic: "technology", interest: 0.9, expertise: 0.7 },
-          { topic: "science", interest: 0.8, expertise: 0.6 },
-        ],
-        formats: [
-          { format: "visual", preference: 0.8 },
-          { format: "text", preference: 0.6 },
-        ],
-        complexity: "intermediate",
-        languages: ["zh-CN", "en-US"],
-      },
-      interactionStyle: {
-        responseSpeed: "normal",
-        detailLevel: "moderate",
-        feedbackFrequency: 0.3,
-        helpSeeking: "reactive",
-      },
-      temporalPatterns: {
-        dailyActivity: new Array(24).fill(0).map((_, i) => (i >= 9 && i <= 17 ? 0.8 : i >= 19 && i <= 22 ? 0.6 : 0.2)),
-        weeklyActivity: [0.6, 0.8, 0.8, 0.8, 0.8, 0.4, 0.3],
-        seasonalTrends: { spring: 0.8, summer: 0.6, autumn: 0.9, winter: 0.7 },
-        productivityCycles: [
-          { start: 9, end: 11, productivity: 0.9 },
-          { start: 14, end: 16, productivity: 0.8 },
-        ],
-      },
-      contextualFactors: {
-        deviceUsage: { desktop: 0.7, mobile: 0.3 },
-        locationPatterns: [
-          { location: "office", activities: ["work", "research"] },
-          { location: "home", activities: ["learning", "creative"] },
-        ],
-        socialContext: "individual",
-        workflowIntegration: ["notion", "slack", "github"],
-      },
-    }
-  }
-
-  private async trainPredictionModel(
-    userId: string,
-    patterns: UserBehaviorPattern,
-    historicalData: any,
-  ): Promise<void> {
-    // 训练个性化预测模型
-    // 这里是简化的实现，实际应用中会使用机器学习算法
-
-    const model = {
-      userId,
-      accuracy: 0.75,
-      lastTrained: Date.now(),
-      features: {
-        temporal: 0.3,
-        behavioral: 0.4,
-        contextual: 0.3,
-      },
-      predictions: new Map(),
-    }
-
-    this.predictionModels.set(userId, model)
-  }
-
-  private async generatePredictiveInsights(userId: string): Promise<PredictiveInsight[]> {
-    const patterns = this.userPatterns.get(userId)
-    if (!patterns) return []
-
-    const insights: PredictiveInsight[] = []
-
-    // 基于使用模式生成洞察
-    if (patterns.sessionPatterns.preferredFeatures.length > 0) {
-      const topFeature = patterns.sessionPatterns.preferredFeatures[0]
-
-      insights.push({
-        id: `insight_${Date.now()}_1`,
-        type: "content_recommendation",
-        confidence: 0.8,
-        timeframe: "short_term",
-        prediction: {
-          action: `使用${topFeature.feature}功能`,
-          context: { feature: topFeature.feature },
-          reasoning: [
-            `用户经常使用此功能 (${Math.round(topFeature.usage * 100)}%)`,
-            `满意度较高 (${Math.round(topFeature.satisfaction * 100)}%)`,
-          ],
-          alternatives: [
-            { action: "探索相关功能", probability: 0.3 },
-            { action: "查看使用教程", probability: 0.2 },
-          ],
-        },
-        recommendations: [
-          {
-            type: "proactive_help",
-            description: "预加载相关资源",
-            implementation: { preload: topFeature.feature },
-            expectedBenefit: "减少等待时间",
-          },
-        ],
-        triggers: [
-          {
-            condition: "session_start",
-            threshold: 0.8,
-            currentValue: 1.0,
-          },
-        ],
-        metadata: {
-          createdAt: Date.now(),
-          basedOnSessions: 10,
-          historicalAccuracy: 0.75,
-        },
-      })
-    }
-
-    return insights
-  }
-
-  private async analyzeRealTimeBehavior(userId: string, context: any): Promise<void> {
-    // 实时分析用户行为
-    const patterns = this.userPatterns.get(userId)
-    if (!patterns) return
-
-    // 检测异常行为
-    if (context.timeOnPage > patterns.sessionPatterns.averageSessionDuration * 60 * 1.5) {
-      // 用户在页面停留时间过长，可能需要帮助
-      await this.provideProactiveHelp(userId, "suggestion")
-    }
-
-    // 检测效率问题
-    if (context.interactions.length > 10 && context.timeOnPage < 60) {
-      // 短时间内大量交互，可能遇到困难
-      await this.provideProactiveHelp(userId, "warning")
-    }
-  }
-
-  private async updatePredictions(userId: string): Promise<void> {
-    // 基于实时上下文更新预测
-    const newInsights = await this.generatePredictiveInsights(userId)
-    const existingInsights = this.activeInsights.get(userId) || []
-
-    // 合并新旧洞察，去除过期的
-    const currentTime = Date.now()
-    const validInsights = existingInsights.filter(
-      (insight) => currentTime - insight.metadata.createdAt < 3600000, // 1小时内的洞察
-    )
-
-    this.activeInsights.set(userId, [...validInsights, ...newInsights])
-  }
-
-  private async runPredictionModel(userId: string, input: any): Promise<any> {
-    const model = this.predictionModels.get(userId)
-    if (!model) {
-      throw new Error("预测模型未找到")
-    }
-
-    // 简化的预测逻辑
-    // 实际应用中会使用复杂的机器学习模型
-
-    const { patterns, context, timeframe } = input
-
-    // 基于时间模式预测
+  private static predictFromTimePatterns(
+    patterns: UserBehaviorPattern[],
+    context: Record<string, any>
+  ): InteractionPrediction[] {
     const currentHour = new Date().getHours()
-    const hourlyActivity = patterns.temporalPatterns.dailyActivity[currentHour]
+    const timeBasedPatterns = patterns.filter(p => {
+      const patternHour = new Date(p.timestamp).getHours()
+      return Math.abs(patternHour - currentHour) <= 1
+    })
 
-    // 基于导航模式预测
-    const currentPath = context.currentPage
-    const likelyNextPages = patterns.sessionPatterns.navigationPaths
-      .filter((path) => path.path.includes(currentPath))
-      .map((path) => {
-        const currentIndex = path.path.indexOf(currentPath)
-        return currentIndex < path.path.length - 1 ? path.path[currentIndex + 1] : null
-      })
-      .filter(Boolean)
+    if (timeBasedPatterns.length === 0) return []
 
-    if (likelyNextPages.length > 0) {
-      return {
-        action: `导航到${likelyNextPages[0]}`,
-        context: { nextPage: likelyNextPages[0] },
-        confidence: hourlyActivity * 0.8,
-        reasoning: ["基于历史导航模式", "当前时间活跃度较高"],
-        alternatives: likelyNextPages.slice(1).map((page) => ({
-          action: `导航到${page}`,
-          probability: 0.3,
-        })),
-        triggers: [
-          {
-            condition: "time_on_current_page",
-            threshold: 120, // 2分钟
-            currentValue: context.timeOnPage,
-          },
-        ],
-      }
-    }
+    const actionCounts = new Map<string, number>()
+    timeBasedPatterns.forEach(pattern => {
+      const count = actionCounts.get(pattern.actionType) || 0
+      actionCounts.set(pattern.actionType, count + 1)
+    })
 
-    return {
-      action: "继续当前任务",
-      context: {},
-      confidence: 0.5,
-      reasoning: ["无明确模式"],
-      alternatives: [],
-      triggers: [],
-    }
-  }
+    const predictions: InteractionPrediction[] = []
+    const totalCount = timeBasedPatterns.length
 
-  private async generateActionRecommendations(prediction: any): Promise<PredictiveInsight["recommendations"]> {
-    return [
-      {
-        type: "proactive_help",
-        description: `为 "${prediction.action}" 准备相关资源`,
-        implementation: { action: "preload_resources", target: prediction.context },
-        expectedBenefit: "提升响应速度",
-      },
-    ]
-  }
-
-  private getModelAccuracy(userId: string): number {
-    const model = this.predictionModels.get(userId)
-    return model?.accuracy || 0.5
-  }
-
-  private async analyzeCurrentWorkflow(userId: string, workflowId: string): Promise<any> {
-    // 分析当前工作流程
-    return {
-      id: workflowId,
-      steps: [
-        { step: "搜索信息", averageTime: 120, errorRate: 0.1, userSatisfaction: 0.7, bottlenecks: ["搜索结果不准确"] },
-        { step: "整理内容", averageTime: 300, errorRate: 0.05, userSatisfaction: 0.8, bottlenecks: ["手动整理耗时"] },
-        { step: "生成输出", averageTime: 180, errorRate: 0.15, userSatisfaction: 0.6, bottlenecks: ["格式调整复杂"] },
-      ],
-    }
-  }
-
-  private async identifyBottlenecks(workflow: any): Promise<any[]> {
-    return workflow.steps
-      .filter((step: any) => step.errorRate > 0.1 || step.userSatisfaction < 0.7)
-      .map((step: any) => ({
-        step: step.step,
-        issues: step.bottlenecks,
-        severity: step.errorRate + (1 - step.userSatisfaction),
-      }))
-  }
-
-  private async generateImprovements(bottlenecks: any[], patterns: UserBehaviorPattern): Promise<any> {
-    return {
-      steps: [
-        { step: "智能搜索", estimatedTime: 60, improvements: ["AI辅助搜索", "结果预筛选"], automationPotential: 0.8 },
-        { step: "自动整理", estimatedTime: 120, improvements: ["模板化处理", "智能分类"], automationPotential: 0.9 },
-        { step: "一键生成", estimatedTime: 90, improvements: ["预设格式", "批量处理"], automationPotential: 0.7 },
-      ],
-      metrics: {
-        timeReduction: 45,
-        errorReduction: 60,
-        satisfactionIncrease: 25,
-        effortReduction: 50,
-      },
-      plan: [
-        { phase: 1, changes: ["实施智能搜索"], timeline: "1周", resources: ["AI模型", "搜索优化"] },
-        { phase: 2, changes: ["添加自动整理"], timeline: "2周", resources: ["模板系统", "分类算法"] },
-        { phase: 3, changes: ["完善生成功能"], timeline: "1周", resources: ["格式引擎", "批处理系统"] },
-      ],
-    }
-  }
-
-  private async analyzeUserState(userId: string, context: any): Promise<any> {
-    return {
-      currentTask: this.inferCurrentTask(context),
-      skillLevel: this.assessSkillLevel(this.userPatterns.get(userId)!, context.currentPage),
-      frustrationLevel: this.detectFrustration(context),
-      cognitiveLoad: this.estimateCognitiveLoad(context),
-      availableTime: this.estimateAvailableTime(context),
-    }
-  }
-
-  private determineHelpType(
-    trigger: ProactiveAssistance["type"],
-    userState: any,
-    patterns: UserBehaviorPattern,
-  ): ProactiveAssistance["assistance"]["type"] {
-    switch (trigger) {
-      case "suggestion":
-        return userState.skillLevel === "beginner" ? "tutorial" : "suggestion"
-      case "warning":
-        return "automation"
-      case "opportunity":
-        return "resource"
-      default:
-        return "suggestion"
-    }
-  }
-
-  private async generateHelpContent(
-    helpType: ProactiveAssistance["assistance"]["type"],
-    userState: any,
-    patterns: UserBehaviorPattern,
-  ): Promise<any> {
-    const baseContent = {
-      userLevel: userState.skillLevel,
-      preferredStyle: patterns.interactionStyle.detailLevel,
-      context: userState.currentTask,
-    }
-
-    switch (helpType) {
-      case "tutorial":
-        return {
-          ...baseContent,
-          type: "step_by_step",
-          steps: await this.generateTutorialSteps(userState.currentTask, userState.skillLevel),
-          interactive: true,
-          estimatedTime: this.estimateTutorialTime(userState.skillLevel),
-        }
-
-      case "suggestion":
-        return {
-          ...baseContent,
-          type: "quick_tip",
-          suggestions: await this.generateSuggestions(userState.currentTask, patterns),
-          priority: "high",
-          actionable: true,
-        }
-
-      case "automation":
-        return {
-          ...baseContent,
-          type: "workflow_automation",
-          automationOptions: await this.generateAutomationOptions(userState.currentTask),
-          setupRequired: true,
-          benefits: ["时间节省", "错误减少", "一致性提升"],
-        }
-
-      case "resource":
-        return {
-          ...baseContent,
-          type: "knowledge_resource",
-          resources: await this.findRelevantResources(userState.currentTask, patterns.contentPreferences),
-          format: patterns.contentPreferences.formats[0]?.format || "text",
-          difficulty: userState.skillLevel,
-        }
-
-      default:
-        return {
-          ...baseContent,
-          type: "general_help",
-          content: "我注意到您可能需要一些帮助，请告诉我您遇到的具体问题。",
-        }
-    }
-  }
-
-  private determineOptimalTiming(
-    userState: any,
-    patterns: UserBehaviorPattern,
-  ): ProactiveAssistance["assistance"]["timing"] {
-    if (userState.frustrationLevel > 0.7) {
-      return "immediate"
-    } else if (userState.cognitiveLoad > 0.8) {
-      return "contextual"
-    } else {
-      return "scheduled"
-    }
-  }
-
-  private determineDeliveryMethod(
-    interactionStyle: UserBehaviorPattern["interactionStyle"],
-  ): ProactiveAssistance["assistance"]["delivery"] {
-    if (interactionStyle.helpSeeking === "proactive") {
-      return "notification"
-    } else if (interactionStyle.detailLevel === "brief") {
-      return "ambient"
-    } else {
-      return "inline"
-    }
-  }
-
-  private inferLearningStyle(patterns: UserBehaviorPattern): string {
-    const visualPreference = patterns.contentPreferences.formats.find((f) => f.format === "visual")?.preference || 0
-    const textPreference = patterns.contentPreferences.formats.find((f) => f.format === "text")?.preference || 0
-
-    if (visualPreference > textPreference) {
-      return "visual"
-    } else if (patterns.interactionStyle.detailLevel === "comprehensive") {
-      return "analytical"
-    } else {
-      return "practical"
-    }
-  }
-
-  private assessSkillLevel(patterns: UserBehaviorPattern, currentPage: string): string {
-    const relevantTopics = patterns.contentPreferences.topics.filter((topic) =>
-      currentPage.toLowerCase().includes(topic.topic.toLowerCase()),
-    )
-
-    if (relevantTopics.length > 0) {
-      const avgExpertise = relevantTopics.reduce((sum, topic) => sum + topic.expertise, 0) / relevantTopics.length
-
-      if (avgExpertise > 0.7) return "advanced"
-      if (avgExpertise > 0.4) return "intermediate"
-      return "beginner"
-    }
-
-    return patterns.contentPreferences.complexity
-  }
-
-  private async updateModelAccuracy(userId: string, feedback: any): Promise<void> {
-    const model = this.predictionModels.get(userId)
-    if (!model) return
-
-    // 更新模型准确性
-    const currentAccuracy = model.accuracy
-    const feedbackWeight = 0.1 // 新反馈的权重
-
-    const newAccuracy = feedback.accurate
-      ? currentAccuracy + (1 - currentAccuracy) * feedbackWeight
-      : currentAccuracy * (1 - feedbackWeight)
-
-    model.accuracy = Math.max(0.1, Math.min(0.95, newAccuracy))
-    model.lastTrained = Date.now()
-
-    this.predictionModels.set(userId, model)
-  }
-
-  private async updatePredictionModel(userId: string, trainingData: any): Promise<void> {
-    const model = this.predictionModels.get(userId)
-    if (!model) return
-
-    // 使用新的训练数据更新模型
-    // 这里是简化的实现，实际应用中会使用在线学习算法
-
-    const { predicted, actual, context } = trainingData
-
-    // 如果预测错误，调整模型参数
-    if (predicted !== actual) {
-      // 增加对实际行为的权重
-      if (!model.predictions.has(actual)) {
-        model.predictions.set(actual, 0)
-      }
-
-      const currentWeight = model.predictions.get(actual)
-      model.predictions.set(actual, currentWeight + 0.1)
-
-      // 减少错误预测的权重
-      if (model.predictions.has(predicted)) {
-        const wrongWeight = model.predictions.get(predicted)
-        model.predictions.set(predicted, Math.max(0, wrongWeight - 0.05))
-      }
-    }
-
-    this.predictionModels.set(userId, model)
-  }
-
-  private identifyRepetitiveTasks(patterns: UserBehaviorPattern): Array<{
-    name: string
-    frequency: number
-    timeSpent: number
-    automationPotential: number
-  }> {
-    const tasks = []
-
-    // 分析导航模式中的重复路径
-    for (const path of patterns.sessionPatterns.navigationPaths) {
-      if (path.frequency > 0.3) {
-        // 30%以上的会话都使用此路径
-        tasks.push({
-          name: `导航路径: ${path.path.join(" → ")}`,
-          frequency: path.frequency * 10, // 转换为每天的频次
-          timeSpent: path.path.length * 30, // 估计每步30秒
-          automationPotential: 0.8, // 导航可以高度自动化
+    for (const [action, count] of actionCounts.entries()) {
+      const confidence = count / totalCount
+      
+      if (confidence > 0.2) {
+        predictions.push({
+          action,
+          confidence,
+          context: { ...context, predictedFrom: "time_pattern" },
+          suggestedUI: this.generateUIAdaptations(action, context),
+          estimatedTime: this.estimateActionTime(action, timeBasedPatterns),
+          alternatives: [],
         })
       }
     }
 
-    // 分析功能使用模式
-    for (const feature of patterns.sessionPatterns.preferredFeatures) {
-      if (feature.usage > 0.5) {
-        tasks.push({
-          name: `使用${feature.feature}功能`,
-          frequency: feature.usage * 5, // 估计每天使用次数
-          timeSpent: 120, // 估计每次2分钟
-          automationPotential: this.calculateAutomationPotential(feature.feature),
+    return predictions
+  }
+
+  private static generateUIAdaptations(action: string, context: Record<string, any>): UIAdaptation[] {
+    const adaptations: UIAdaptation[] = []
+
+    switch (action) {
+      case "search":
+        adaptations.push({
+          elementId: "search-input",
+          adaptationType: "visibility",
+          changes: { visible: true, focused: true },
+          priority: 1,
+          duration: 0,
         })
+        break
+      
+      case "view_results":
+        adaptations.push({
+          elementId: "results-container",
+          adaptationType: "position",
+          changes: { scrollTop: 0 },
+          priority: 1,
+          duration: 300,
+        })
+        break
+      
+      case "scroll_results":
+        adaptations.push({
+          elementId: "load-more-button",
+          adaptationType: "visibility",
+          changes: { visible: true, preload: true },
+          priority: 2,
+          duration: 0,
+        })
+        break
+    }
+
+    return adaptations
+  }
+
+  private static estimateActionTime(action: string, patterns: UserBehaviorPattern[]): number {
+    const actionPatterns = patterns.filter(p => p.actionType === action)
+    
+    if (actionPatterns.length === 0) {
+      const defaultTimes: Record<string, number> = {
+        "search": 3000,
+        "click": 500,
+        "scroll": 2000,
+        "read": 15000,
       }
+      return defaultTimes[action] || 5000
     }
 
-    return tasks.sort((a, b) => b.frequency * b.automationPotential - a.frequency * a.automationPotential)
+    const avgDuration = actionPatterns.reduce((sum, p) => sum + p.duration, 0) / actionPatterns.length
+    return avgDuration
   }
 
-  private analyzeNavigationPatterns(patterns: UserBehaviorPattern): Array<{
-    description: string
-    benefit: string
-    impact: number
-  }> {
-    const optimizations = []
+  static applyUIAdaptations(userId: string, predictions: InteractionPrediction[]): void {
+    const adaptations: UIAdaptation[] = []
+    
+    predictions.forEach(prediction => {
+      adaptations.push(...prediction.suggestedUI)
+    })
 
-    // 分析常用路径
-    const frequentPaths = patterns.sessionPatterns.navigationPaths
-      .filter((path) => path.frequency > 0.2)
-      .sort((a, b) => b.frequency - a.frequency)
+    adaptations.sort((a, b) => a.priority - b.priority)
 
-    for (const path of frequentPaths.slice(0, 3)) {
-      optimizations.push({
-        description: `为路径 "${path.path.join(" → ")}" 创建快捷方式`,
-        benefit: `节省 ${(path.path.length - 1) * 15} 秒导航时间`,
-        impact: path.frequency * (path.path.length - 1),
-      })
-    }
+    adaptations.forEach(adaptation => {
+      this.applyUIAdaptation(adaptation)
+    })
 
-    // 分析退出点
-    const commonExitPoints = patterns.sessionPatterns.exitPoints.filter(
-      (exit) => exit.frequency > 0.2 && exit.reason !== "task_completed",
-    )
-
-    for (const exit of commonExitPoints) {
-      optimizations.push({
-        description: `优化 "${exit.page}" 页面以减少意外退出`,
-        benefit: `提高任务完成率 ${Math.round(exit.frequency * 100)}%`,
-        impact: exit.frequency * 2,
-      })
-    }
-
-    return optimizations
+    this.uiAdaptations.set(userId, adaptations)
   }
 
-  private async generateToolSuggestions(patterns: UserBehaviorPattern): Promise<
-    Array<{
-      type: "tool_suggestion"
-      description: string
-      expectedBenefit: string
-      implementationEffort: "low" | "medium" | "high"
-      priority: number
-    }>
-  > {
-    const suggestions = []
+  private static applyUIAdaptation(adaptation: UIAdaptation): void {
+    if (typeof window === "undefined") return
 
-    // 基于内容偏好推荐工具
-    const visualPreference = patterns.contentPreferences.formats.find((f) => f.format === "visual")?.preference || 0
+    const element = document.getElementById(adaptation.elementId)
+    if (!element) return
 
-    if (visualPreference > 0.7) {
-      suggestions.push({
-        type: "tool_suggestion" as const,
-        description: "集成高级可视化工具",
-        expectedBenefit: "提升视觉内容创建效率50%",
-        implementationEffort: "medium" as const,
-        priority: visualPreference * 0.8,
-      })
-    }
-
-    // 基于工作流集成推荐
-    if (patterns.contextualFactors.workflowIntegration.length > 0) {
-      suggestions.push({
-        type: "tool_suggestion" as const,
-        description: `增强与 ${patterns.contextualFactors.workflowIntegration.join(", ")} 的集成`,
-        expectedBenefit: "减少工具切换时间60%",
-        implementationEffort: "high" as const,
-        priority: patterns.contextualFactors.workflowIntegration.length * 0.3,
-      })
-    }
-
-    return suggestions
-  }
-
-  private calculateAutomationPotential(feature: string): number {
-    // 不同功能的自动化潜力评估
-    const automationMap: Record<string, number> = {
-      search: 0.6,
-      mindmap: 0.8,
-      poster: 0.7,
-      ppt: 0.9,
-      webpage: 0.8,
-      analysis: 0.5,
-    }
-
-    return automationMap[feature] || 0.5
-  }
-
-  private inferCurrentTask(context: any): string {
-    // 基于当前页面和交互推断任务
-    const page = context.currentPage
-    const interactions = context.interactions || []
-
-    if (page.includes("search")) {
-      return "信息搜索"
-    } else if (page.includes("generate")) {
-      return "内容生成"
-    } else if (page.includes("mindmap")) {
-      return "思维导图创建"
-    } else if (interactions.some((i: any) => i.type === "edit")) {
-      return "内容编辑"
-    } else {
-      return "浏览探索"
+    switch (adaptation.adaptationType) {
+      case "visibility":
+        if (adaptation.changes.visible) {
+          element.style.display = "block"
+          if (adaptation.changes.focused) {
+            (element as HTMLInputElement).focus?.()
+          }
+        } else {
+          element.style.display = "none"
+        }
+        break
+      
+      case "position":
+        if (adaptation.changes.scrollTop !== undefined) {
+          element.scrollTop = adaptation.changes.scrollTop
+        }
+        break
+      
+      case "size":
+        if (adaptation.changes.width) {
+          element.style.width = adaptation.changes.width
+        }
+        if (adaptation.changes.height) {
+          element.style.height = adaptation.changes.height
+        }
+        break
+      
+      case "style":
+        Object.assign(element.style, adaptation.changes)
+        break
     }
   }
 
-  private detectFrustration(context: any): number {
-    let frustrationScore = 0
-
-    // 基于交互模式检测挫折感
-    if (context.interactions) {
-      const rapidClicks = context.interactions.filter((i: any) => i.type === "click").length
-      const timeSpan = context.timeOnPage
-
-      if (rapidClicks > 10 && timeSpan < 120) {
-        frustrationScore += 0.4 // 短时间内大量点击
+  static trainModel(modelId: string): Promise<boolean> {
+    return new Promise((resolve) => {
+      const model = this.predictionModels.get(modelId)
+      if (!model) {
+        resolve(false)
+        return
       }
+
+      setTimeout(() => {
+        model.lastTrained = new Date()
+        model.accuracy = Math.min(0.95, model.accuracy + 0.01)
+        model.trainingData += 100
+        
+        console.log(`模型 ${modelId} 训练完成，准确率: ${model.accuracy}`)
+        resolve(true)
+      }, 2000)
+    })
+  }
+
+  private static scheduleModelUpdates(): void {
+    if (typeof window !== "undefined") {
+      setInterval(() => {
+        this.predictionModels.forEach((model, modelId) => {
+          if (model.isActive) {
+            this.trainModel(modelId)
+          }
+        })
+      }, 3600000)
     }
+  }
 
-    // 基于鼠标移动检测
-    if (context.mouseMovement) {
-      const erraticMovement = context.mouseMovement.filter((m: any, i: number) => {
-        if (i === 0) return false
-        const prev = context.mouseMovement[i - 1]
-        const distance = Math.sqrt(Math.pow(m.x - prev.x, 2) + Math.pow(m.y - prev.y, 2))
-        return distance > 100 // 大幅度鼠标移动
-      }).length
+  private static getCurrentUserId(): string {
+    return typeof localStorage !== "undefined" ? 
+      (localStorage.getItem("userId") || "anonymous") : "anonymous"
+  }
 
-      if (erraticMovement > context.mouseMovement.length * 0.3) {
-        frustrationScore += 0.3
+  private static throttle<T extends (...args: any[]) => any>(func: T, delay: number): T {
+    let lastCall = 0
+    return ((...args: any[]) => {
+      const now = Date.now()
+      if (now - lastCall >= delay) {
+        lastCall = now
+        return func(...args)
       }
-    }
-
-    // 基于页面停留时间
-    if (context.timeOnPage > 300 && context.interactions.length < 3) {
-      frustrationScore += 0.3 // 长时间停留但交互很少
-    }
-
-    return Math.min(frustrationScore, 1)
+    }) as T
   }
 
-  private estimateCognitiveLoad(context: any): number {
-    let cognitiveLoad = 0.5 // 基础认知负荷
-
-    // 基于任务复杂性
-    if (context.currentPage.includes("generate")) {
-      cognitiveLoad += 0.3 // 生成任务认知负荷较高
+  static getUserBehaviorStats(userId: string): {
+    totalActions: number
+    mostFrequentAction: string
+    averageSessionDuration: number
+    predictedNextActions: InteractionPrediction[]
+  } {
+    const patterns = this.behaviorPatterns.get(userId) || []
+    const predictions = this.currentPredictions.get(userId) || []
+    
+    const actionCounts = new Map<string, number>()
+    let totalDuration = 0
+    
+    patterns.forEach(pattern => {
+      const count = actionCounts.get(pattern.actionType) || 0
+      actionCounts.set(pattern.actionType, count + pattern.frequency)
+      totalDuration += pattern.duration
+    })
+    
+    const mostFrequentAction = Array.from(actionCounts.entries())
+      .sort((a, b) => b[1] - a[1])[0]?.[0] || "unknown"
+    
+    return {
+      totalActions: patterns.length,
+      mostFrequentAction,
+      averageSessionDuration: patterns.length > 0 ? totalDuration / patterns.length : 0,
+      predictedNextActions: predictions,
     }
-
-    // 基于多任务处理
-    if (context.interactions && context.interactions.length > 15) {
-      cognitiveLoad += 0.2 // 大量交互增加认知负荷
-    }
-
-    // 基于时间压力
-    if (context.keyboardActivity?.speed > 100) {
-      cognitiveLoad += 0.2 // 快速打字可能表示时间压力
-    }
-
-    return Math.min(cognitiveLoad, 1)
   }
 
-  private estimateAvailableTime(context: any): number {
-    // 基于设备和环境推断可用时间
-    const deviceContext = context.deviceContext || {}
-
-    if (deviceContext.battery && deviceContext.battery < 20) {
-      return 15 // 电量低，可能时间有限
-    }
-
-    if (context.environmentalContext?.timeOfDay) {
-      const hour = context.environmentalContext.timeOfDay
-      if (hour >= 22 || hour <= 6) {
-        return 30 // 深夜或早晨，可能时间有限
-      }
-    }
-
-    return 60 // 默认估计1小时可用时间
+  static getPredictionModels(): PredictionModel[] {
+    return Array.from(this.predictionModels.values())
   }
 
-  private async generateTutorialSteps(task: string, skillLevel: string): Promise<string[]> {
-    const stepMap: Record<string, Record<string, string[]>> = {
-      信息搜索: {
-        beginner: ["打开搜索页面", "输入关键词", "选择搜索类型", "查看结果", "保存有用信息"],
-        intermediate: ["使用高级搜索", "筛选结果", "分析信息质量", "整理搜索结果"],
-        advanced: ["构建搜索策略", "使用专业数据库", "交叉验证信息", "建立知识图谱"],
-      },
-      内容生成: {
-        beginner: ["选择生成类型", "输入基本信息", "选择模板", "生成内容", "简单编辑"],
-        intermediate: ["自定义参数", "多轮优化", "格式调整", "质量检查"],
-        advanced: ["高级定制", "批量生成", "自动化流程", "质量控制系统"],
-      },
-    }
-
-    return stepMap[task]?.[skillLevel] || ["开始任务", "执行操作", "检查结果", "完成任务"]
-  }
-
-  private estimateTutorialTime(skillLevel: string): number {
-    const timeMap = {
-      beginner: 10,
-      intermediate: 7,
-      advanced: 5,
-    }
-    return timeMap[skillLevel as keyof typeof timeMap] || 8
-  }
-
-  private async generateSuggestions(task: string, patterns: UserBehaviorPattern): Promise<string[]> {
-    const suggestions = []
-
-    // 基于任务类型生成建议
-    if (task === "信息搜索") {
-      suggestions.push("尝试使用更具体的关键词")
-      suggestions.push("使用引号搜索精确短语")
-      suggestions.push("添加时间范围筛选")
-    } else if (task === "内容生成") {
-      suggestions.push("提供更详细的描述")
-      suggestions.push("选择合适的风格模板")
-      suggestions.push("使用示例作为参考")
-    }
-
-    // 基于用户偏好调整建议
-    if (patterns.interactionStyle.detailLevel === "brief") {
-      return suggestions.slice(0, 2) // 简洁用户只显示前两个建议
-    }
-
-    return suggestions
-  }
-
-  private async generateAutomationOptions(task: string): Promise<
-    Array<{
-      name: string
-      description: string
-      setup: string[]
-      benefits: string[]
-    }>
-  > {
-    const automationMap: Record<string, any> = {
-      信息搜索: {
-        name: "智能搜索助手",
-        description: "自动优化搜索查询并筛选结果",
-        setup: ["设置搜索偏好", "配置筛选规则", "启用自动保存"],
-        benefits: ["节省搜索时间", "提高结果质量", "自动整理信息"],
-      },
-      内容生成: {
-        name: "批量生成工具",
-        description: "基于模板批量生成相似内容",
-        setup: ["创建内容模板", "设置变量参数", "配置输出格式"],
-        benefits: ["大幅提升效率", "保持内容一致性", "减少重复工作"],
-      },
-    }
-
-    return [
-      automationMap[task] || {
-        name: "通用自动化",
-        description: "为当前任务创建自动化流程",
-        setup: ["分析任务步骤", "设置触发条件", "配置执行规则"],
-        benefits: ["减少手动操作", "提高准确性", "节省时间"],
-      },
-    ]
-  }
-
-  private async findRelevantResources(
-    task: string,
-    contentPreferences: UserBehaviorPattern["contentPreferences"],
-  ): Promise<
-    Array<{
-      title: string
-      type: string
-      url: string
-      relevance: number
-    }>
-  > {
-    // 模拟资源查找
-    const resources = [
-      {
-        title: `${task}完整指南`,
-        type: "tutorial",
-        url: `/resources/guide/${task.toLowerCase()}`,
-        relevance: 0.9,
-      },
-      {
-        title: `${task}最佳实践`,
-        type: "article",
-        url: `/resources/best-practices/${task.toLowerCase()}`,
-        relevance: 0.8,
-      },
-      {
-        title: `${task}视频教程`,
-        type: "video",
-        url: `/resources/video/${task.toLowerCase()}`,
-        relevance: contentPreferences.formats.find((f) => f.format === "video")?.preference || 0.6,
-      },
-    ]
-
-    return resources.sort((a, b) => b.relevance - a.relevance)
-  }
-
-  private async generateAlternatives(
-    task: string,
-    patterns: UserBehaviorPattern,
-  ): Promise<
-    Array<{
-      method: string
-      description: string
-      suitability: number
-      pros: string[]
-      cons: string[]
-    }>
-  > {
-    const alternatives = []
-
-    if (task === "信息搜索") {
-      alternatives.push(
-        {
-          method: "AI辅助搜索",
-          description: "使用AI理解查询意图并推荐相关内容",
-          suitability: 0.9,
-          pros: ["更准确的结果", "节省时间", "发现相关主题"],
-          cons: ["需要学习新界面", "可能过度依赖AI"],
-        },
-        {
-          method: "传统关键词搜索",
-          description: "使用传统搜索引擎方法",
-          suitability: patterns.contentPreferences.complexity === "beginner" ? 0.8 : 0.6,
-          pros: ["熟悉的界面", "完全控制", "透明的结果"],
-          cons: ["需要更多时间", "可能遗漏相关内容"],
-        },
-      )
-    }
-
-    return alternatives.sort((a, b) => b.suitability - a.suitability)
+  static getOptimizedWorkflows(): WorkflowOptimization[] {
+    return Array.from(this.workflows.values())
   }
 }
 
-// 全局实例
-export const predictiveInteraction = new PredictiveInteractionEngine()
+export const predictiveInteraction = PredictiveInteractionManager
