@@ -1,26 +1,44 @@
 "use client"
 
-import { useState, useEffect } from "react"
+export const dynamic = "force-dynamic"
+export const revalidate = 0
+
+import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
-import { ArrowLeft, Brain, Eye, Heart, Zap, Smartphone, Monitor, Activity, TrendingUp, Play, Pause, Volume2, Palette, Wind, Music, Target, Users, Sparkles, CircuitBoard, Lightbulb, Settings, BarChart3, Cpu, Database, Headphones, Camera, Mic, Globe, Wifi, Battery, Clock, Award, Star } from 'lucide-react'
-
-// 导入高级功能模块
-import { advancedAI, type UserContext } from "@/lib/advanced-ai-engine"
-import { crossDeviceSync, type Device } from "@/lib/cross-device-sync"
-import { arvrInterface, type XRSession } from "@/lib/ar-vr-interface"
-import { emotionAI, type EmotionData, type ColorTherapyConfig } from "@/lib/emotion-ai"
 import {
-  predictiveInteraction,
-  type WorkflowOptimization,
-  type ProactiveAssistance,
-  type PredictiveInsight,
-  type PredictionModelConfig,
-  type ModelPerformanceMetrics,
-} from "@/lib/predictive-interaction"
+  ArrowLeft,
+  Brain,
+  Eye,
+  Heart,
+  Zap,
+  Smartphone,
+  Monitor,
+  Activity,
+  Palette,
+  Wind,
+  Music,
+  Target,
+  Users,
+  Sparkles,
+  CircuitBoard,
+  Lightbulb,
+  Settings,
+  BarChart3,
+  Globe,
+  Wifi,
+  Clock,
+  Award,
+  Star,
+  TrendingUp,
+} from "lucide-react"
+import type { Device } from "@/lib/cross-device-sync"
+import type { XRSession } from "@/lib/ar-vr-interface"
+import type { EmotionData, ColorTherapyConfig } from "@/lib/emotion-ai"
+import type { PredictiveInsight, ModelPerformanceMetrics } from "@/lib/predictive-interaction"
 
 // 导入组件
 import { OptimizationProgress } from "@/components/optimization-progress"
@@ -29,7 +47,7 @@ import { ModelComparison } from "@/components/model-comparison"
 
 export default function NextGenInterfacePage() {
   const router = useRouter()
-  
+
   // 状态管理
   const [activeTab, setActiveTab] = useState("overview")
   const [isInitialized, setIsInitialized] = useState(false)
@@ -45,38 +63,70 @@ export default function NextGenInterfacePage() {
   const [afterTestResults, setAfterTestResults] = useState<any>(null)
   const [showComparison, setShowComparison] = useState(false)
 
+  const advancedAIRef = useRef<any>(null)
+  const crossDeviceSyncRef = useRef<any>(null)
+  const arvrInterfaceRef = useRef<any>(null)
+  const emotionAIRef = useRef<any>(null)
+  const predictiveInteractionRef = useRef<any>(null)
+  const [xrSupported, setXrSupported] = useState<boolean>(false)
+
   // 初始化系统
   useEffect(() => {
     const initializeSystem = async () => {
       try {
+        const [{ advancedAI }, { crossDeviceSync }, { arvrInterface }, { emotionAI }, { predictiveInteraction }] =
+          await Promise.all([
+            import("@/lib/advanced-ai-engine"),
+            import("@/lib/cross-device-sync"),
+            import("@/lib/ar-vr-interface"),
+            import("@/lib/emotion-ai"),
+            import("@/lib/predictive-interaction"),
+          ])
+        advancedAIRef.current = advancedAI
+        crossDeviceSyncRef.current = crossDeviceSync
+        arvrInterfaceRef.current = arvrInterface
+        emotionAIRef.current = emotionAI
+        predictiveInteractionRef.current = predictiveInteraction
+        setXrSupported(arvrInterface.isSupported())
+
         // 初始化各个AI系统
         await Promise.all([
-          advancedAI.initialize(),
-          crossDeviceSync.initialize(),
-          arvrInterface.initialize(),
-          emotionAI.initialize(),
-          predictiveInteraction.initialize(),
+          advancedAIRef.current.initialize(),
+          crossDeviceSyncRef.current.initialize(),
+          arvrInterfaceRef.current.initialize(),
+          emotionAIRef.current.initialize(),
+          predictiveInteractionRef.current.initialize(),
         ])
 
         // 为当前用户初始化预测系统
-        await predictiveInteraction.initializeForUser("current_user")
+        await predictiveInteractionRef.current.initializeForUser("current_user")
 
         // 获取初始数据
-        const devices = await crossDeviceSync.discoverDevices()
+        const devices = await crossDeviceSyncRef.current.discoverDevices()
         setConnectedDevices(devices)
 
-        const performance = predictiveInteraction.getModelPerformance("current_user")
+        const performance = predictiveInteractionRef.current.getModelPerformance("current_user")
         setModelPerformance(performance)
 
         // 模拟情绪分析
-        const emotion = await emotionAI.analyzeEmotion({
+        const emotion = await emotionAIRef.current.analyzeEmotion({
           userId: "current_user",
           text: "我对这个新界面很感兴趣",
         })
         setCurrentEmotion(emotion)
 
+        try {
+          await fetch("/api/emotions", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(emotion),
+          })
+        } catch (e) {
+          console.warn("保存情绪数据失败（可忽略开发阶段）:", e)
+        }
+
         // 生成色彩疗法
-        const therapy = await emotionAI.generateColorTherapy(emotion)
+        const therapy = await emotionAIRef.current.generateColorTherapy(emotion)
         setColorTherapy(therapy)
 
         setIsInitialized(true)
@@ -94,9 +144,9 @@ export default function NextGenInterfacePage() {
 
     const updatePredictions = async () => {
       try {
-        const insight = await predictiveInteraction.predictNextAction("current_user", "immediate")
+        const insight = await predictiveInteractionRef.current?.predictNextAction("current_user", "immediate")
         if (insight) {
-          setPredictions(prev => [insight, ...prev.slice(0, 4)])
+          setPredictions((prev) => [insight, ...prev.slice(0, 4)])
         }
       } catch (error) {
         console.error("预测更新失败:", error)
@@ -107,13 +157,31 @@ export default function NextGenInterfacePage() {
     return () => clearInterval(interval)
   }, [isInitialized])
 
+  useEffect(() => {
+    if (!isInitialized) return
+    const loadHistory = async () => {
+      try {
+        const res = await fetch("/api/emotions")
+        if (res.ok) {
+          const history = await res.json()
+          console.log("历史情绪数据:", history)
+        } else {
+          console.log("历史情绪数据暂不可用:", await res.text())
+        }
+      } catch (e) {
+        console.log("获取历史情绪数据失败:", e)
+      }
+    }
+    loadHistory()
+  }, [isInitialized])
+
   // 处理优化完成
   const handleOptimizationComplete = (results: any) => {
     setOptimizationResults(results)
     setIsOptimizing(false)
-    
+
     // 更新模型性能
-    const updatedPerformance = predictiveInteraction.getModelPerformance("current_user")
+    const updatedPerformance = predictiveInteractionRef.current?.getModelPerformance("current_user")
     setModelPerformance(updatedPerformance)
   }
 
@@ -131,7 +199,7 @@ export default function NextGenInterfacePage() {
   const startOptimization = async () => {
     setIsOptimizing(true)
     try {
-      await predictiveInteraction.optimizePredictionAlgorithm("current_user")
+      await predictiveInteractionRef.current?.optimizePredictionAlgorithm("current_user")
     } catch (error) {
       console.error("优化失败:", error)
       setIsOptimizing(false)
@@ -141,9 +209,9 @@ export default function NextGenInterfacePage() {
   // 启动AR会话
   const startARSession = async () => {
     try {
-      const success = await arvrInterface.startARSession()
+      const success = await arvrInterfaceRef.current?.startARSession()
       if (success) {
-        const session = arvrInterface.getSession()
+        const session = arvrInterfaceRef.current?.getSession()
         setXrSession(session)
       }
     } catch (error) {
@@ -154,11 +222,11 @@ export default function NextGenInterfacePage() {
   // 切换设备
   const switchToDevice = async (deviceId: string) => {
     try {
-      const success = await crossDeviceSync.handoffToDevice(deviceId, {
+      const success = await crossDeviceSyncRef.current?.handoffToDevice(deviceId, {
         currentPage: "/next-gen-interface",
         userState: { activeTab, predictions },
       })
-      
+
       if (success) {
         // 显示成功消息
         console.log("设备切换成功")
@@ -202,16 +270,11 @@ export default function NextGenInterfacePage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center space-x-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => router.back()}
-                className="flex items-center space-x-2"
-              >
+              <Button variant="ghost" size="sm" onClick={() => router.back()} className="flex items-center space-x-2">
                 <ArrowLeft className="w-4 h-4" />
                 <span>返回</span>
               </Button>
-              
+
               <div className="flex items-center space-x-2">
                 <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
                   <Sparkles className="w-5 h-5 text-white" />
@@ -229,7 +292,7 @@ export default function NextGenInterfacePage() {
                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                 <span className="text-sm text-gray-600">AI系统运行中</span>
               </div>
-              
+
               {/* 当前情绪显示 */}
               {currentEmotion && (
                 <Badge className="bg-gradient-to-r from-pink-500 to-purple-500">
@@ -338,21 +401,14 @@ export default function NextGenInterfacePage() {
                   {predictions.length > 0 ? (
                     <div className="space-y-3">
                       {predictions.map((prediction, index) => (
-                        <div
-                          key={prediction.id}
-                          className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg"
-                        >
+                        <div key={prediction.id} className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
                           <div className="w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
                           <div className="flex-1">
                             <div className="flex items-center justify-between">
                               <h4 className="font-medium">{prediction.prediction.action}</h4>
-                              <Badge variant="outline">
-                                {(prediction.confidence * 100).toFixed(0)}% 置信度
-                              </Badge>
+                              <Badge variant="outline">{(prediction.confidence * 100).toFixed(0)}% 置信度</Badge>
                             </div>
-                            <p className="text-sm text-gray-600 mt-1">
-                              {prediction.prediction.reasoning[0]}
-                            </p>
+                            <p className="text-sm text-gray-600 mt-1">{prediction.prediction.reasoning[0]}</p>
                             <div className="flex items-center space-x-2 mt-2">
                               <Clock className="w-3 h-3 text-gray-400" />
                               <span className="text-xs text-gray-500">{prediction.timeframe}</span>
@@ -372,7 +428,10 @@ export default function NextGenInterfacePage() {
 
               {/* 系统功能概览 */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => setActiveTab("emotion")}>
+                <Card
+                  className="hover:shadow-lg transition-shadow cursor-pointer"
+                  onClick={() => setActiveTab("emotion")}
+                >
                   <CardContent className="p-6">
                     <div className="flex items-center space-x-3 mb-4">
                       <div className="w-10 h-10 bg-pink-100 rounded-lg flex items-center justify-center">
@@ -380,9 +439,7 @@ export default function NextGenInterfacePage() {
                       </div>
                       <h3 className="font-semibold">情绪AI系统</h3>
                     </div>
-                    <p className="text-sm text-gray-600 mb-3">
-                      实时分析用户情绪状态，提供个性化的界面适配和情绪支持
-                    </p>
+                    <p className="text-sm text-gray-600 mb-3">实时分析用户情绪状态，提供个性化的界面适配和情绪支持</p>
                     <div className="flex items-center space-x-2">
                       <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                       <span className="text-xs text-gray-500">已激活</span>
@@ -390,7 +447,10 @@ export default function NextGenInterfacePage() {
                   </CardContent>
                 </Card>
 
-                <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => setActiveTab("prediction")}>
+                <Card
+                  className="hover:shadow-lg transition-shadow cursor-pointer"
+                  onClick={() => setActiveTab("prediction")}
+                >
                   <CardContent className="p-6">
                     <div className="flex items-center space-x-3 mb-4">
                       <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -398,9 +458,7 @@ export default function NextGenInterfacePage() {
                       </div>
                       <h3 className="font-semibold">预测交互系统</h3>
                     </div>
-                    <p className="text-sm text-gray-600 mb-3">
-                      基于用户行为模式预测下一步操作，提前准备相关功能和内容
-                    </p>
+                    <p className="text-sm text-gray-600 mb-3">基于用户行为模式预测下一步操作，提前准备相关功能和内容</p>
                     <div className="flex items-center space-x-2">
                       <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                       <span className="text-xs text-gray-500">学习中</span>
@@ -408,7 +466,10 @@ export default function NextGenInterfacePage() {
                   </CardContent>
                 </Card>
 
-                <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => setActiveTab("devices")}>
+                <Card
+                  className="hover:shadow-lg transition-shadow cursor-pointer"
+                  onClick={() => setActiveTab("devices")}
+                >
                   <CardContent className="p-6">
                     <div className="flex items-center space-x-3 mb-4">
                       <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
@@ -416,9 +477,7 @@ export default function NextGenInterfacePage() {
                       </div>
                       <h3 className="font-semibold">跨设备同步</h3>
                     </div>
-                    <p className="text-sm text-gray-600 mb-3">
-                      无缝在多个设备间切换，保持工作状态和个人偏好同步
-                    </p>
+                    <p className="text-sm text-gray-600 mb-3">无缝在多个设备间切换，保持工作状态和个人偏好同步</p>
                     <div className="flex items-center space-x-2">
                       <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
                       <span className="text-xs text-gray-500">{connectedDevices.length} 设备在线</span>
@@ -446,9 +505,7 @@ export default function NextGenInterfacePage() {
                       <Card className="bg-gradient-to-br from-pink-50 to-purple-50 border-pink-200">
                         <CardContent className="p-6 text-center">
                           <h3 className="font-semibold mb-2">主要情绪</h3>
-                          <div className="text-3xl font-bold text-pink-600 mb-2">
-                            {currentEmotion.primary}
-                          </div>
+                          <div className="text-3xl font-bold text-pink-600 mb-2">{currentEmotion.primary}</div>
                           <div className="text-sm text-gray-600">
                             强度: {(currentEmotion.intensity * 100).toFixed(0)}%
                           </div>
@@ -461,9 +518,7 @@ export default function NextGenInterfacePage() {
                           <div className="text-3xl font-bold text-blue-600 mb-2">
                             {currentEmotion.valence > 0 ? "积极" : currentEmotion.valence < 0 ? "消极" : "中性"}
                           </div>
-                          <div className="text-sm text-gray-600">
-                            数值: {currentEmotion.valence.toFixed(2)}
-                          </div>
+                          <div className="text-sm text-gray-600">数值: {currentEmotion.valence.toFixed(2)}</div>
                         </CardContent>
                       </Card>
 
@@ -473,9 +528,7 @@ export default function NextGenInterfacePage() {
                           <div className="text-3xl font-bold text-green-600 mb-2">
                             {currentEmotion.arousal > 0.6 ? "高" : currentEmotion.arousal > 0.4 ? "中" : "低"}
                           </div>
-                          <div className="text-sm text-gray-600">
-                            数值: {currentEmotion.arousal.toFixed(2)}
-                          </div>
+                          <div className="text-sm text-gray-600">数值: {currentEmotion.arousal.toFixed(2)}</div>
                         </CardContent>
                       </Card>
                     </div>
@@ -525,7 +578,7 @@ export default function NextGenInterfacePage() {
                             <p className="text-xs text-gray-500">{colorTherapy.textColor}</p>
                           </div>
                         </div>
-                        
+
                         <div className="mt-6 flex justify-center">
                           <Button className="bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600">
                             <Palette className="w-4 h-4 mr-2" />
@@ -542,9 +595,7 @@ export default function NextGenInterfacePage() {
                       <CardContent className="p-6 text-center">
                         <Wind className="w-12 h-12 text-blue-500 mx-auto mb-4" />
                         <h3 className="font-semibold mb-2">呼吸练习</h3>
-                        <p className="text-sm text-gray-600 mb-4">
-                          基于当前情绪状态的个性化呼吸指导
-                        </p>
+                        <p className="text-sm text-gray-600 mb-4">基于当前情绪状态的个性化呼吸指导</p>
                         <Button size="sm" variant="outline">
                           开始练习
                         </Button>
@@ -555,9 +606,7 @@ export default function NextGenInterfacePage() {
                       <CardContent className="p-6 text-center">
                         <Music className="w-12 h-12 text-green-500 mx-auto mb-4" />
                         <h3 className="font-semibold mb-2">音乐疗法</h3>
-                        <p className="text-sm text-gray-600 mb-4">
-                          根据情绪推荐舒缓或激励的音乐
-                        </p>
+                        <p className="text-sm text-gray-600 mb-4">根据情绪推荐舒缓或激励的音乐</p>
                         <Button size="sm" variant="outline">
                           播放音乐
                         </Button>
@@ -568,9 +617,7 @@ export default function NextGenInterfacePage() {
                       <CardContent className="p-6 text-center">
                         <Lightbulb className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
                         <h3 className="font-semibold mb-2">情绪建议</h3>
-                        <p className="text-sm text-gray-600 mb-4">
-                          AI生成的个性化情绪调节建议
-                        </p>
+                        <p className="text-sm text-gray-600 mb-4">AI生成的个性化情绪调节建议</p>
                         <Button size="sm" variant="outline">
                           获取建议
                         </Button>
@@ -639,9 +686,7 @@ export default function NextGenInterfacePage() {
                               <div className="flex items-start justify-between">
                                 <div className="flex-1">
                                   <div className="flex items-center space-x-2 mb-2">
-                                    <Badge className="bg-blue-500">
-                                      {prediction.type}
-                                    </Badge>
+                                    <Badge className="bg-blue-500">{prediction.type}</Badge>
                                     <span className="font-medium">{prediction.prediction.action}</span>
                                   </div>
                                   <p className="text-sm text-gray-600 mb-2">
@@ -712,7 +757,7 @@ export default function NextGenInterfacePage() {
                             </div>
                           </div>
                         </div>
-                        
+
                         <div>
                           <h4 className="font-medium mb-3">置信度阈值</h4>
                           <div className="space-y-3">
@@ -777,7 +822,7 @@ export default function NextGenInterfacePage() {
                                 <span className="text-xs text-gray-500">在线</span>
                               </div>
                             </div>
-                            
+
                             <div className="space-y-2 mb-4">
                               <div className="flex items-center justify-between text-sm">
                                 <span>屏幕</span>
@@ -797,12 +842,8 @@ export default function NextGenInterfacePage() {
                                 </div>
                               )}
                             </div>
-                            
-                            <Button
-                              size="sm"
-                              className="w-full"
-                              onClick={() => switchToDevice(device.id)}
-                            >
+
+                            <Button size="sm" className="w-full" onClick={() => switchToDevice(device.id)}>
                               切换到此设备
                             </Button>
                           </CardContent>
@@ -845,15 +886,15 @@ export default function NextGenInterfacePage() {
                       </CardHeader>
                       <CardContent>
                         <div className="space-y-4">
-                          <Button className="w-full" variant="outline">
+                          <Button className="w-full bg-transparent" variant="outline">
                             <Users className="w-4 h-4 mr-2" />
                             创建协作会话
                           </Button>
-                          <Button className="w-full" variant="outline">
+                          <Button className="w-full bg-transparent" variant="outline">
                             <Globe className="w-4 h-4 mr-2" />
                             共享当前页面
                           </Button>
-                          <Button className="w-full" variant="outline">
+                          <Button className="w-full bg-transparent" variant="outline">
                             <Wifi className="w-4 h-4 mr-2" />
                             发现附近设备
                           </Button>
@@ -879,21 +920,21 @@ export default function NextGenInterfacePage() {
                 <CardContent className="space-y-6">
                   {/* XR支持状态 */}
                   <div className="text-center py-8">
-                    {arvrInterface.isSupported() ? (
+                    {xrSupported ? (
                       <div className="space-y-4">
                         <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto">
                           <Eye className="w-8 h-8 text-purple-600" />
                         </div>
                         <h3 className="text-lg font-semibold">XR设备支持已启用</h3>
                         <p className="text-gray-600">您的设备支持增强现实和虚拟现实功能</p>
-                        
+
                         {!xrSession ? (
                           <div className="flex justify-center space-x-4">
                             <Button onClick={startARSession} className="bg-purple-600 hover:bg-purple-700">
                               <Eye className="w-4 h-4 mr-2" />
                               启动AR会话
                             </Button>
-                            <Button variant="outline" onClick={() => arvrInterface.startVRSession()}>
+                            <Button variant="outline" onClick={() => arvrInterfaceRef.current.startVRSession()}>
                               <Eye className="w-4 h-4 mr-2" />
                               启动VR会话
                             </Button>
@@ -919,7 +960,7 @@ export default function NextGenInterfacePage() {
                                 <div className="text-gray-500">状态</div>
                               </div>
                             </div>
-                            <Button variant="outline" onClick={() => arvrInterface.endSession()}>
+                            <Button variant="outline" onClick={() => arvrInterfaceRef.current.endSession()}>
                               结束XR会话
                             </Button>
                           </div>
@@ -932,9 +973,7 @@ export default function NextGenInterfacePage() {
                         </div>
                         <h3 className="text-lg font-semibold text-gray-600">XR设备不支持</h3>
                         <p className="text-gray-500">您的设备或浏览器不支持WebXR功能</p>
-                        <p className="text-sm text-gray-400">
-                          请使用支持WebXR的现代浏览器或XR设备访问此功能
-                        </p>
+                        <p className="text-sm text-gray-400">请使用支持WebXR的现代浏览器或XR设备访问此功能</p>
                       </div>
                     )}
                   </div>
@@ -947,9 +986,7 @@ export default function NextGenInterfacePage() {
                           <Target className="w-6 h-6 text-blue-600" />
                         </div>
                         <h3 className="font-semibold mb-2">空间搜索</h3>
-                        <p className="text-sm text-gray-600 mb-4">
-                          在3D空间中进行直观的信息搜索和浏览
-                        </p>
+                        <p className="text-sm text-gray-600 mb-4">在3D空间中进行直观的信息搜索和浏览</p>
                         <Badge variant="outline">AR功能</Badge>
                       </CardContent>
                     </Card>
@@ -960,9 +997,7 @@ export default function NextGenInterfacePage() {
                           <Users className="w-6 h-6 text-green-600" />
                         </div>
                         <h3 className="font-semibold mb-2">协作空间</h3>
-                        <p className="text-sm text-gray-600 mb-4">
-                          与他人在虚拟空间中实时协作和讨论
-                        </p>
+                        <p className="text-sm text-gray-600 mb-4">与他人在虚拟空间中实时协作和讨论</p>
                         <Badge variant="outline">VR功能</Badge>
                       </CardContent>
                     </Card>
@@ -973,9 +1008,7 @@ export default function NextGenInterfacePage() {
                           <BarChart3 className="w-6 h-6 text-purple-600" />
                         </div>
                         <h3 className="font-semibold mb-2">数据可视化</h3>
-                        <p className="text-sm text-gray-600 mb-4">
-                          在3D空间中展示和操作复杂数据
-                        </p>
+                        <p className="text-sm text-gray-600 mb-4">在3D空间中展示和操作复杂数据</p>
                         <Badge variant="outline">混合现实</Badge>
                       </CardContent>
                     </Card>
@@ -990,10 +1023,7 @@ export default function NextGenInterfacePage() {
             <div className="space-y-6">
               {/* 优化进度 */}
               {isOptimizing && (
-                <OptimizationProgress
-                  isOptimizing={isOptimizing}
-                  onComplete={handleOptimizationComplete}
-                />
+                <OptimizationProgress isOptimizing={isOptimizing} onComplete={handleOptimizationComplete} />
               )}
 
               {/* 优化结果 */}
@@ -1032,12 +1062,9 @@ export default function NextGenInterfacePage() {
                         <div className="text-sm text-green-600">延迟降低</div>
                       </div>
                     </div>
-                    
+
                     <div className="text-center">
-                      <Button
-                        onClick={() => setActiveTab("prediction")}
-                        className="bg-green-600 hover:bg-green-700"
-                      >
+                      <Button onClick={() => setActiveTab("prediction")} className="bg-green-600 hover:bg-green-700">
                         查看优化后的预测系统
                       </Button>
                     </div>
@@ -1054,7 +1081,7 @@ export default function NextGenInterfacePage() {
                     onTestComplete={(results) => handleTestComplete(results, true)}
                   />
                 </div>
-                
+
                 <div>
                   <h3 className="text-lg font-semibold mb-4">优化后测试</h3>
                   {optimizationResults ? (
@@ -1067,11 +1094,7 @@ export default function NextGenInterfacePage() {
                       <CardContent className="text-center py-12">
                         <Zap className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                         <p className="text-gray-500">请先完成模型优化</p>
-                        <Button
-                          onClick={startOptimization}
-                          disabled={isOptimizing}
-                          className="mt-4"
-                        >
+                        <Button onClick={startOptimization} disabled={isOptimizing} className="mt-4">
                           {isOptimizing ? "优化中..." : "开始优化"}
                         </Button>
                       </CardContent>
@@ -1111,7 +1134,7 @@ export default function NextGenInterfacePage() {
                       <p className="text-gray-600 mb-6">
                         使用先进的机器学习算法自动优化AI模型性能，提升预测准确性和响应速度
                       </p>
-                      
+
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                         <div className="text-center p-4 bg-gray-50 rounded-lg">
                           <TrendingUp className="w-8 h-8 text-green-600 mx-auto mb-2" />
@@ -1129,7 +1152,7 @@ export default function NextGenInterfacePage() {
                           <p className="text-sm text-gray-600">自动参数调整</p>
                         </div>
                       </div>
-                      
+
                       <Button
                         onClick={startOptimization}
                         size="lg"
