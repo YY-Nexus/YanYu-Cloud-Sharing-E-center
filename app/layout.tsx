@@ -1,72 +1,28 @@
 import type React from "react"
-import type { Metadata, Viewport } from "next"
+import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
-import { ThemeProvider } from "@/components/theme-provider"
 
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "YYC³ AI - 无边界智能交互中心",
-  description: "基于无边界设计理念的AI智能交互平台，支持语音、手势、眼动等多模态交互方式",
-  keywords: ["AI", "搜索", "人工智能", "内容生成", "智能助手"],
-  authors: [{ name: "AI搜索团队" }],
-  creator: "AI搜索平台",
-  publisher: "AI搜索平台",
-  formatDetection: {
-    email: false,
-    address: false,
-    telephone: false,
-  },
-  manifest: "/manifest.json",
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: "default",
-    title: "AI搜索",
-  },
+  title: "YanYu Cloud Sharing E-center - 智能管理系统",
+  description: "YanYu Cloud Sharing E-center 专业的企业智能管理平台，提供数据中心、组织管理、绩效激励等全方位解决方案",
+  keywords: "YanYu Cloud, 言语云, 智能管理, 企业管理, 数据中心, 组织管理",
+  authors: [{ name: "YanYu Cloud Team" }],
+  creator: "YanYu Cloud Sharing E-center",
+  publisher: "YanYu Cloud Sharing E-center",
+  robots: "index, follow",
+  viewport: "width=device-width, initial-scale=1",
+  themeColor: "#3B82F6",
   openGraph: {
+    title: "YanYu Cloud Sharing E-center - 智能管理系统",
+    description: "专业的企业智能管理平台",
     type: "website",
-    siteName: "YYC³ AI - 无边界智能交互中心",
-    title: "YYC³ AI - 无边界智能交互中心",
-    description: "基于无边界设计理念的AI智能交互平台，支持语音、手势、眼动等多模态交互方式",
-    images: [
-      {
-        url: "/icon-512.png",
-        width: 512,
-        height: 512,
-        alt: "YYC³ AI - 无边界智能交互中心",
-      },
-    ],
+    locale: "zh_CN",
+    siteName: "YanYu Cloud Sharing E-center",
   },
-  twitter: {
-    card: "summary_large_image",
-    title: "YYC³ AI - 无边界智能交互中心",
-    description: "基于无边界设计理念的AI智能交互平台，支持语音、手势、眼动等多模态交互方式",
-    images: ["/icon-512.png"],
-  },
-  robots: {
-    index: true,
-    follow: true,
-    googleBot: {
-      index: true,
-      follow: true,
-      "max-video-preview": -1,
-      "max-image-preview": "large",
-      "max-snippet": -1,
-    },
-  },
-    generator: 'v0.dev'
-}
-
-export const viewport: Viewport = {
-  width: "device-width",
-  initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#000000" },
-  ],
+    generator: 'v0.app'
 }
 
 export default function RootLayout({
@@ -75,54 +31,12 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="zh-CN" suppressHydrationWarning>
+    <html lang="zh-CN">
       <head>
-        {/* PWA Meta Tags */}
-        <meta name="application-name" content="AI搜索" />
-        <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="apple-mobile-web-app-title" content="AI搜索" />
-        <meta name="format-detection" content="telephone=no" />
-        <meta name="mobile-web-app-capable" content="yes" />
-        <meta name="msapplication-config" content="/browserconfig.xml" />
-        <meta name="msapplication-TileColor" content="#3b82f6" />
-        <meta name="msapplication-tap-highlight" content="no" />
-
-        {/* Apple Touch Icons */}
-        <link rel="apple-touch-icon" href="/icon-192.png" />
-        <link rel="apple-touch-icon" sizes="152x152" href="/icon-152.png" />
-        <link rel="apple-touch-icon" sizes="180x180" href="/icon-192.png" />
-        <link rel="apple-touch-icon" sizes="167x167" href="/icon-192.png" />
-
-        {/* Favicons */}
-        <link rel="icon" type="image/png" sizes="32x32" href="/icon-72.png" />
-        <link rel="icon" type="image/png" sizes="16x16" href="/icon-72.png" />
-        <link rel="shortcut icon" href="/icon-72.png" />
-
-        {/* Service Worker Registration Script */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              if ('serviceWorker' in navigator) {
-                window.addEventListener('load', function() {
-                  navigator.serviceWorker.register('/sw.js', { scope: '/' })
-                    .then(function(registration) {
-                      console.log('✅ SW registered: ', registration);
-                    })
-                    .catch(function(registrationError) {
-                      console.log('❌ SW registration failed: ', registrationError);
-                    });
-                });
-              }
-            `,
-          }}
-        />
+        <link rel="icon" href="/yanyu-cloud-logo.png" />
+        <link rel="apple-touch-icon" href="/yanyu-cloud-logo.png" />
       </head>
-      <body className={inter.className}>
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-          {children}
-        </ThemeProvider>
-      </body>
+      <body className={inter.className}>{children}</body>
     </html>
   )
 }

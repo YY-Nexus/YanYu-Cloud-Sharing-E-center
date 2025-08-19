@@ -52,6 +52,16 @@ module.exports = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        sidebar: {
+          DEFAULT: "hsl(var(--sidebar-background))",
+          foreground: "hsl(var(--sidebar-foreground))",
+          primary: "hsl(var(--sidebar-primary))",
+          "primary-foreground": "hsl(var(--sidebar-primary-foreground))",
+          accent: "hsl(var(--sidebar-accent))",
+          "accent-foreground": "hsl(var(--sidebar-accent-foreground))",
+          border: "hsl(var(--sidebar-border))",
+          ring: "hsl(var(--sidebar-ring))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -67,41 +77,41 @@ module.exports = {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: "0" },
         },
-        "borderless-glow": {
-          "0%, 100%": { boxShadow: "0 0 20px rgba(139, 92, 246, 0.3)" },
-          "50%": { boxShadow: "0 0 40px rgba(139, 92, 246, 0.6)" },
+        "fade-in": {
+          from: { opacity: "0", transform: "translateY(10px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
         },
-        "gesture-ripple": {
-          "0%": { transform: "scale(0)", opacity: "1" },
-          "100%": { transform: "scale(4)", opacity: "0" },
-        },
-        "voice-wave": {
-          "0%, 100%": { transform: "scaleY(1)" },
-          "50%": { transform: "scaleY(1.5)" },
-        },
-        float: {
-          "0%, 100%": { transform: "translateY(0px)" },
-          "50%": { transform: "translateY(-10px)" },
-        },
-        "pulse-glow": {
-          "0%, 100%": { opacity: "1" },
-          "50%": { opacity: "0.5" },
+        "slide-in": {
+          from: { transform: "translateX(-100%)" },
+          to: { transform: "translateX(0)" },
         },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
-        "borderless-glow": "borderless-glow 2s ease-in-out infinite",
-        "gesture-ripple": "gesture-ripple 0.6s linear",
-        "voice-wave": "voice-wave 1s ease-in-out infinite",
-        float: "float 3s ease-in-out infinite",
-        "pulse-glow": "pulse-glow 2s ease-in-out infinite",
+        "fade-in": "fade-in 0.3s ease-out",
+        "slide-in": "slide-in 0.3s ease-out",
+      },
+      fontFamily: {
+        sans: [
+          "-apple-system",
+          "BlinkMacSystemFont",
+          "Segoe UI",
+          "Roboto",
+          "Noto Sans",
+          "Ubuntu",
+          "Cantarell",
+          "Helvetica Neue",
+          "sans-serif",
+        ],
+      },
+      boxShadow: {
+        soft: "0 2px 8px rgba(0, 0, 0, 0.04)",
+        gentle: "0 4px 12px rgba(0, 0, 0, 0.05)",
+        warm: "0 8px 25px rgba(0, 0, 0, 0.08)",
       },
       backdropBlur: {
         xs: "2px",
-      },
-      scale: {
-        102: "1.02",
       },
     },
   },
