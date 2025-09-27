@@ -7,8 +7,12 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
   images: {
-    unoptimized: true,
+    domains: ['blob.v0.app'],
+    unoptimized: true
   },
-}
+  experimental: {
+    optimizePackageImports: ['lucide-react']
+  }
+};
 
-export default nextConfig
+export default nextConfig;
